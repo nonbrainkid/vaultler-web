@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>THE VAULTLER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800;900&family=Space+Mono:wght@400;700&family=Archivo:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --oil:#1a1310;        /* machine-room dark warm brown-black */
+    --oil-2:#241a14;
+    --panel:#2c2019;
+    --brass:#c99a4b;
+    --brass-hi:#e6c479;
+    --brass-lo:#8a6a34;
+    --enamel:#ece3d0;     /* off-white enamel label */
+    --amber:#f2c14e;      /* incandescent readout glow */
+    --patina:#5aa596;     /* aged-copper gauge tint */
+    --danger:#b5533a;     /* rust / raider */
+    --danger-hi:#e0714f;
+    --muted:#9c8a76;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:
+      radial-gradient(120% 90% at 50% 0%, #2a1e16 0%, var(--oil) 55%, #120c09 100%);
+    color:var(--enamel);
+    font-family:'Archivo',system-ui,sans-serif;
+    display:flex;justify-content:center;
+    min-height:100dvh;
+    padding:16px 14px 28px;
+  }
+  .wrap{width:100%;max-width:430px;display:flex;flex-direction:column;gap:14px}
+
+  /* ---- brass plaque header ---- */
+  .plaque{
+    text-align:center;position:relative;padding:14px 12px 12px;
+    background:linear-gradient(180deg,#3a2c22,#241a14);
+    border:1px solid #4a3626;border-radius:12px;
+    box-shadow:inset 0 1px 0 rgba(230,196,121,.25), 0 6px 18px rgba(0,0,0,.5);
+  }
+  .plaque .kicker{
+    font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.32em;
+    color:var(--brass);text-transform:uppercase;opacity:.85;
+  }
+  .plaque h1{
+    font-family:'Big Shoulders Display',sans-serif;font-weight:900;
+    font-size:44px;line-height:.9;letter-spacing:.02em;margin:2px 0 0;
+    color:var(--brass-hi);
+    text-shadow:0 1px 0 #6e5228, 0 2px 3px rgba(0,0,0,.6);
+  }
+  .plaque .sub{font-size:11px;color:var(--muted);margin-top:5px;font-weight:600}
+  .rivets:before,.rivets:after{content:"";position:absolute;top:9px;width:6px;height:6px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#f0d18f,#7a5a2a);box-shadow:0 1px 1px #000}
+  .rivets:before{left:10px}.rivets:after{right:10px}
+
+  /* ---- tier badge ---- */
+  .tierbar{display:flex;align-items:center;justify-content:space-between;
+    padding:8px 12px;background:var(--panel);border:1px solid #3d2d20;border-radius:10px}
+  .tier-name{font-family:'Big Shoulders Display';font-weight:800;font-size:20px;letter-spacing:.03em;color:var(--enamel)}
+  .tier-name .n{font-family:'Space Mono';font-size:10px;color:var(--brass);letter-spacing:.15em;display:block;font-weight:700}
+  .tier-next{font-family:'Space Mono';font-size:10px;color:var(--muted);text-align:right;line-height:1.5}
+  .tier-next b{color:var(--amber)}
+
+  /* ---- the machine ---- */
+  .machine{
+    position:relative;background:linear-gradient(180deg,#2a1f18,#1e1610);
+    border:1px solid #45332430;border-radius:16px;padding:16px 16px 18px;
+    box-shadow:inset 0 2px 10px rgba(0,0,0,.55), 0 8px 22px rgba(0,0,0,.45);
+    overflow:hidden;
+  }
+  .machine.stalled{border-color:var(--danger);box-shadow:inset 0 0 0 1px var(--danger), 0 0 26px rgba(181,83,58,.35)}
+  .machine-top{display:flex;gap:14px;align-items:flex-end}
+
+  /* gauge */
+  .gauge{width:132px;flex:0 0 132px}
+  .gauge svg{display:block;width:100%;overflow:visible}
+  .gauge .cap{font-family:'Space Mono';font-size:9px;letter-spacing:.18em;fill:var(--muted);text-transform:uppercase}
+  .needle{transition:transform .7s cubic-bezier(.34,1.4,.5,1);transform-origin:100px 92px}
+  .reduced .needle{transition:none}
+
+  /* coin chamber */
+  .chamber{flex:1;position:relative;height:150px;border-radius:10px;
+    background:linear-gradient(180deg,#150f0b,#0d0806);
+    border:1px solid #3a2a1e;overflow:hidden;box-shadow:inset 0 3px 8px rgba(0,0,0,.7)}
+  .chamber .glass{position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.05),transparent 40%);pointer-events:none;z-index:3}
+  .coins{position:absolute;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap-reverse;
+    align-content:flex-start;flex-direction:row;gap:2px;padding:5px;justify-content:center;z-index:1}
+  .coin{width:15px;height:15px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,var(--brass-hi),var(--brass) 55%,var(--brass-lo));
+    box-shadow:0 1px 1px rgba(0,0,0,.5), inset 0 0 0 1.5px rgba(0,0,0,.12)}
+  .coin.gold{background:radial-gradient(circle at 35% 30%,#ffe9a8,#f2c14e 55%,#b78a2c)}
+  .drop{position:absolute;top:-18px;left:50%;width:15px;height:15px;border-radius:50%;z-index:2;
+    background:radial-gradient(circle at 35% 30%,var(--brass-hi),var(--brass) 55%,var(--brass-lo));
+    animation:fall .55s ease-in forwards}
+  @keyframes fall{to{top:130px;opacity:.15}}
+  .reduced .drop{display:none}
+  .chamber .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:'Space Mono';font-size:11px;color:#5c4835;letter-spacing:.1em;text-align:center;padding:0 20px}
+
+  /* readout row */
+  .readouts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px}
+  .ro{background:#120c08;border:1px solid #34261b;border-radius:8px;padding:8px 6px;text-align:center}
+  .ro .lab{font-family:'Space Mono';font-size:8.5px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+  .ro .val{font-family:'Space Mono';font-weight:700;font-size:19px;color:var(--amber);
+    text-shadow:0 0 10px rgba(242,193,78,.45);margin-top:2px;line-height:1}
+  .ro .val.sm{font-size:15px}
+  .ro.streak .val{color:var(--danger-hi);text-shadow:0 0 10px rgba(224,113,79,.5)}
+
+  /* status line */
+  .status{text-align:center;font-family:'Space Mono';font-size:12px;letter-spacing:.05em;
+    padding:9px;border-radius:8px;background:#120c08;border:1px solid #34261b}
+  .status.wound{color:var(--patina)}
+  .status.ready{color:var(--amber);border-color:#5c451d;background:#1c1408}
+  .status.stall{color:var(--danger-hi);border-color:var(--danger);background:#22110c}
+
+  /* CRANK button */
+  .crank{
+    width:100%;border:none;cursor:pointer;
+    font-family:'Big Shoulders Display';font-weight:900;font-size:30px;letter-spacing:.06em;
+    color:#1a1108;padding:20px 0 22px;border-radius:14px;position:relative;
+    background:linear-gradient(180deg,var(--brass-hi),var(--brass) 45%,var(--brass-lo));
+    box-shadow:0 6px 0 #5c451d, 0 10px 20px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.4);
+    transition:transform .06s, box-shadow .06s;
+    text-shadow:0 1px 0 rgba(255,255,255,.35);
+  }
+  .crank:active:not(:disabled){transform:translateY(5px);box-shadow:0 1px 0 #5c451d, inset 0 2px 4px rgba(0,0,0,.3)}
+  .crank:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
+  .crank .hint{display:block;font-family:'Space Mono';font-weight:400;font-size:10px;letter-spacing:.14em;margin-top:3px;color:#3a2a12}
+  .crank:disabled{background:linear-gradient(180deg,#4a3a2a,#332619);color:#6b5640;box-shadow:0 4px 0 #241a11;cursor:default}
+  .crank:disabled .hint{color:#5c4835}
+  .crank.danger{background:linear-gradient(180deg,var(--danger-hi),var(--danger) 50%,#7a2f1c);box-shadow:0 6px 0 #5a2215,0 10px 20px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.25);color:#1a0a06}
+  .crank.danger .hint{color:#3a120a}
+
+  /* holder boost + pool */
+  .row2{display:grid;grid-template-columns:1fr;gap:10px}
+  .boost{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--panel);border:1px solid #3d2d20;border-radius:10px;padding:11px 13px}
+  .boost .txt{font-size:12px;color:var(--muted);line-height:1.35}
+  .boost .txt b{color:var(--enamel)}
+  .toggle{flex:0 0 auto;border:1px solid var(--brass-lo);background:#150f0a;color:var(--brass-hi);
+    font-family:'Space Mono';font-size:10px;font-weight:700;letter-spacing:.08em;padding:8px 11px;border-radius:7px;cursor:pointer}
+  .toggle.on{background:var(--brass);color:#1a1108;border-color:var(--brass-hi)}
+
+  .pool{background:linear-gradient(180deg,#1c1509,#150f08);border:1px solid #4a3a1e;border-radius:10px;padding:12px 14px}
+  .pool .top{display:flex;justify-content:space-between;align-items:baseline}
+  .pool .lab{font-family:'Space Mono';font-size:9px;letter-spacing:.16em;color:var(--brass);text-transform:uppercase}
+  .pool .amt{font-family:'Space Mono';font-weight:700;font-size:17px;color:var(--amber)}
+  .pool .sub{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
+  .pool .sub b{color:var(--enamel)}
+
+  /* dev tools */
+  .dev{margin-top:2px;border-top:1px dashed #3a2a1e;padding-top:11px}
+  .dev .devlab{font-family:'Space Mono';font-size:8.5px;letter-spacing:.16em;color:#5c4835;text-transform:uppercase;margin-bottom:7px}
+  .dev .btns{display:flex;gap:7px;flex-wrap:wrap}
+  .dev button{flex:1;min-width:96px;background:#170f0a;border:1px solid #3a2a1e;color:var(--muted);
+    font-family:'Space Mono';font-size:10px;padding:8px 6px;border-radius:6px;cursor:pointer;letter-spacing:.03em}
+  .dev button:active{background:#221610}
+  .foot{text-align:center;font-family:'Space Mono';font-size:9px;color:#4e3d2c;letter-spacing:.1em;margin-top:4px;line-height:1.6}
+
+  /* raid flash */
+  .flash{position:fixed;inset:0;background:radial-gradient(circle,rgba(181,83,58,.35),transparent 70%);
+    pointer-events:none;opacity:0;z-index:50}
+  .flash.go{animation:flash .9s ease-out}
+  @keyframes flash{0%{opacity:1}100%{opacity:0}}
+  .reduced .flash.go{animation:none}
+</style>
+</head>
+<body>
+<div class="flash" id="flash"></div>
+<div class="wrap">
+
+  <div class="plaque rivets">
+    <div class="kicker">Wind it. It stacks while you sleep.</div>
+    <h1>THE VAULTLER</h1>
+    <div class="sub">Trading is cope. Depositing is based.</div>
+  </div>
+
+  <div class="tierbar">
+    <div class="tier-name"><span class="n" id="tierNum">TIER 01</span><span id="tierName">TIN CAN</span></div>
+    <div class="tier-next" id="tierNext">next: SAFE<br><b>500</b> stack</div>
+  </div>
+
+  <div class="machine" id="machine">
+    <div class="machine-top">
+      <div class="gauge">
+        <svg viewBox="0 0 200 118" aria-hidden="true">
+          <path d="M20 92 A80 80 0 0 1 180 92" fill="none" stroke="#3a2a1e" stroke-width="12" stroke-linecap="round"/>
+          <path id="gaugeFill" d="M20 92 A80 80 0 0 1 180 92" fill="none" stroke="var(--patina)" stroke-width="12" stroke-linecap="round"
+                stroke-dasharray="251" stroke-dashoffset="251" style="transition:stroke-dashoffset .7s ease"/>
+          <g class="needle" id="needle">
+            <line x1="100" y1="92" x2="100" y2="30" stroke="var(--amber)" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="100" cy="92" r="7" fill="var(--brass)" stroke="#1a1108" stroke-width="2"/>
+          </g>
+          <text x="100" y="112" text-anchor="middle" class="cap">RATE ×MULT</text>
+        </svg>
+      </div>
+      <div class="chamber">
+        <div class="glass"></div>
+        <div class="coins" id="coins"></div>
+        <div class="empty" id="chamberEmpty">machine is off —<br>crank to start stacking</div>
+      </div>
+    </div>
+
+    <div class="readouts">
+      <div class="ro"><div class="lab">Stack</div><div class="val" id="roStack">0</div></div>
+      <div class="ro streak"><div class="lab">Streak</div><div class="val" id="roStreak">0</div></div>
+      <div class="ro"><div class="lab">Rate /s</div><div class="val sm" id="roRate">0</div></div>
+    </div>
+
+    <div style="margin-top:12px" class="status wound" id="status">Idle</div>
+  </div>
+
+  <button class="crank" id="crank">CRANK<span class="hint">start the machine</span></button>
+
+  <div class="row2">
+    <div class="boost">
+      <div class="txt"><b>Holding $VLTR</b> boosts your stacking rate ×1.5. Non-holders still play — holders climb faster.</div>
+      <button class="toggle" id="boost">SIM HOLD</button>
+    </div>
+    <div class="pool">
+      <div class="top"><span class="lab">Weekly Vault Pool</span><span class="amt" id="poolAmt">1,240 VLTR</span></div>
+      <div class="sub">Fed by <b>0.5% creator fees</b> on every trade. Top 50 stackers split it. Your rank: <b id="rank">#—</b></div>
+    </div>
+  </div>
+
+  <div class="dev">
+    <div class="devlab">Prototype controls · demo speed: 1 cycle = 30s (prod: 24h)</div>
+    <div class="btns">
+      <button id="dReady">⏩ jump to “crank now”</button>
+      <button id="dStall">☠ let it stall (get raided)</button>
+      <button id="dReset">↺ reset</button>
+    </div>
+  </div>
+
+  <div class="foot">SINGLE-PLAYER PROTOTYPE · NOT FINANCIAL · NO REAL FUNDS HELD</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce) document.body.classList.add('reduced');
+
+  // ---- timing (demo) ----
+  const WIND = 30000;   // machine stacks for this long after a crank
+  const GRACE = 15000;  // window to re-crank after WIND ends before it stalls
+  const BASE_RATE = 5;  // stack per second at streak 1, no boost
+  const SKIM = 0.15;    // raider takes this fraction on stall
+
+  const TIERS = [
+    {n:'TIN CAN', at:0, coin:''},
+    {n:'SAFE', at:500, coin:''},
+    {n:'VAULT', at:2500, coin:''},
+    {n:'FORT', at:10000, coin:'gold'},
+    {n:'GOLD RESERVE', at:50000, coin:'gold'},
+  ];
+
+  const KEY='vaultler-proto-v1';
+  let S = { total:0, streak:0, lastCrank:0, lastTick:0, on:false, boost:false, raidPending:false };
+
+  const $=id=>document.getElementById(id);
+  const els={coins:$('coins'),empty:$('chamberEmpty'),roStack:$('roStack'),roStreak:$('roStreak'),
+    roRate:$('roRate'),status:$('status'),crank:$('crank'),needle:$('needle'),gFill:$('gaugeFill'),
+    tierName:$('tierName'),tierNum:$('tierNum'),tierNext:$('tierNext'),machine:$('machine'),
+    boost:$('boost'),rank:$('rank'),poolAmt:$('poolAmt'),flash:$('flash')};
+
+  async function load(){
+    try{ const r=await window.storage.get(KEY); if(r&&r.value){ S=Object.assign(S,JSON.parse(r.value)); } }
+    catch(e){ /* no saved state yet */ }
+    // catch up offline stacking
+    settle(true); render();
+  }
+  let saveT=null;
+  function save(){ clearTimeout(saveT); saveT=setTimeout(async()=>{
+    try{ await window.storage.set(KEY, JSON.stringify(S)); }catch(e){}
+  },300); }
+
+  function mult(){ return (1 + S.streak*0.2) * (S.boost?1.5:1); }
+  function rate(){ return BASE_RATE * mult(); }
+
+  function phase(){
+    if(!S.on) return 'off';
+    const dt = Date.now() - S.lastCrank;
+    if(dt < WIND) return 'wound';
+    if(dt < WIND+GRACE) return 'ready';
+    return 'stall';
+  }
+
+  // accrue stack + resolve raid
+  function settle(silent){
+    const now=Date.now();
+    if(S.on){
+      const woundEnd=S.lastCrank+WIND;
+      const from=Math.max(S.lastTick, S.lastCrank);
+      const to=Math.min(now, woundEnd);
+      if(to>from){ S.total += rate()*(to-from)/1000; }
+      // stall?
+      if(now >= S.lastCrank+WIND+GRACE){
+        // raider skims once
+        const lost=S.total*SKIM;
+        S.total-=lost; S.on=false; S.streak=0; S.raidPending=!silent?false:false;
+        if(!silent){ raid(lost); } else { /* on reload, apply quietly */ }
+      }
+    }
+    S.lastTick=now; save();
+  }
+
+  function raid(lost){
+    els.flash.classList.remove('go'); void els.flash.offsetWidth; els.flash.classList.add('go');
+  }
+
+  function currentTier(){ let t=0; for(let i=0;i<TIERS.length;i++){ if(S.total>=TIERS[i].at) t=i; } return t; }
+
+  function drawCoins(){
+    const ti=currentTier();
+    const cap=[10,22,40,64,90][ti];
+    // number of coins scales with progress inside tier, capped
+    const span = (TIERS[ti+1]?TIERS[ti+1].at:S.total*2) - TIERS[ti].at;
+    const prog = span>0 ? Math.min(1,(S.total-TIERS[ti].at)/span) : 1;
+    const n = Math.max(S.total>0?4:0, Math.round(cap*prog));
+    els.empty.style.display = S.total>0 ? 'none':'flex';
+    const goldClass = TIERS[ti].coin==='gold'?' gold':'';
+    if(els.coins.childElementCount!==n){
+      els.coins.innerHTML='';
+      for(let i=0;i<n;i++){ const c=document.createElement('div'); c.className='coin'+goldClass; els.coins.appendChild(c); }
+    }
+  }
+  let lastDrop=0;
+  function dropCoin(){
+    if(reduce) return;
+    const t=Date.now(); if(t-lastDrop<450) return; lastDrop=t;
+    const ti=currentTier(); const d=document.createElement('div');
+    d.className='drop'+(TIERS[ti].coin==='gold'?' gold':''); d.style.left=(30+Math.random()*40)+'%';
+    els.machine.querySelector('.chamber').appendChild(d);
+    setTimeout(()=>d.remove(),560);
+  }
+
+  function fmt(n){ return Math.floor(n).toLocaleString('en-US'); }
+
+  function render(){
+    const p=phase();
+    // tier
+    const ti=currentTier();
+    els.tierName.textContent=TIERS[ti].n;
+    els.tierNum.textContent='TIER '+String(ti+1).padStart(2,'0');
+    if(TIERS[ti+1]){ els.tierNext.innerHTML='next: '+TIERS[ti+1].n+'<br><b>'+fmt(TIERS[ti+1].at)+'</b> stack'; }
+    else { els.tierNext.innerHTML='<b>MAX TIER</b><br>certified stacker'; }
+    // readouts
+    els.roStack.textContent=fmt(S.total);
+    els.roStreak.textContent=S.streak;
+    els.roRate.textContent=(rate()).toFixed(0);
+    // gauge (map mult ~1..4 to 0..1)
+    const g=Math.min(1,(mult()-1)/3);
+    els.gFill.style.strokeDashoffset = 251-(251*g);
+    els.needle.style.transform='rotate('+(-90+g*180)+'deg)';
+    // boost btn
+    els.boost.classList.toggle('on',S.boost);
+    els.boost.textContent=S.boost?'HOLDING ✓':'SIM HOLD';
+    // rank (fake, from stack)
+    const rk = S.total<=0?'—':Math.max(1, 400 - Math.floor(S.total/40));
+    els.rank.textContent='#'+rk;
+    // machine visual state
+    els.machine.classList.toggle('stalled', p==='stall');
+    drawCoins();
+    // status + crank
+    const c=els.crank; c.classList.remove('danger'); c.disabled=false;
+    els.status.className='status';
+    if(p==='off'){
+      els.status.classList.add('wound'); els.status.textContent='machine is off';
+      c.querySelector('.hint').textContent='start the machine'; c.firstChild.textContent='CRANK';
+    } else if(p==='wound'){
+      const left=Math.ceil((S.lastCrank+WIND-Date.now())/1000);
+      els.status.classList.add('wound'); els.status.textContent='STACKING · '+left+'s left in this wind';
+      c.disabled=true; c.querySelector('.hint').textContent='already winding — come back at 0'; c.firstChild.textContent='WINDING…';
+    } else if(p==='ready'){
+      const left=Math.ceil((S.lastCrank+WIND+GRACE-Date.now())/1000);
+      els.status.classList.add('ready'); els.status.textContent='⚡ CRANK NOW · '+left+'s before the raider comes';
+      c.querySelector('.hint').textContent='+1 streak · multiplier up'; c.firstChild.textContent='CRANK';
+    } else { // stall
+      els.status.classList.add('stall'); els.status.textContent='☠ RAIDED — machine stalled, streak lost';
+      c.classList.add('danger'); c.querySelector('.hint').textContent='streak resets to 1'; c.firstChild.textContent='RESTART';
+    }
+  }
+
+  function doCrank(){
+    settle(false);
+    const p=phase();
+    if(p==='wound'){ return; }
+    if(p==='ready'){ S.streak+=1; }
+    else { S.streak=1; }               // off or stall → fresh start
+    S.on=true; S.lastCrank=Date.now(); S.lastTick=Date.now();
+    save(); render();
+  }
+
+  // loop
+  function tick(){
+    if(S.on){
+      const p=phase();
+      settle(false);
+      if(p==='wound') dropCoin();
+    }
+    render();
+  }
+  setInterval(tick, reduce?1000:250);
+
+  // events
+  els.crank.addEventListener('click',doCrank);
+  els.boost.addEventListener('click',()=>{ S.boost=!S.boost; save(); render(); });
+  $('dReady').addEventListener('click',()=>{ if(!S.on){doCrank();} S.lastCrank=Date.now()-WIND-200; S.lastTick=Date.now(); settle(false); render(); });
+  $('dStall').addEventListener('click',()=>{ if(!S.on){doCrank();} S.lastCrank=Date.now()-WIND-GRACE-500; settle(false); render(); });
+  $('dReset').addEventListener('click',async()=>{ S={total:0,streak:0,lastCrank:0,lastTick:0,on:false,boost:false,raidPending:false};
+    try{await window.storage.delete(KEY);}catch(e){} render(); });
+
+  load();
+})();
+</script>
+</body>
+</html>

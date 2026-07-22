@@ -1,0 +1,45 @@
+// VAULTLER — схема БД (прод: Vercel Postgres).
+// На M1 локально используется файловый стор (lib/store-file.ts); этот Prisma-стор
+// (lib/store-prisma.ts) включается автоматически, когда выставлен DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id           String   @id @default(cuid())
+  // Идентичность: на M1 — dev-session id; на M2 — адрес кошелька (lowercase).
+  identity     String   @unique
+  stack        Float    @default(0)
+  streak       Int      @default(0)
+  lastCrankAt  BigInt? // epoch ms
+  lastSettleAt BigInt // epoch ms
+  machineOn    Boolean  @default(false)
+  boost        Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  crankLogs CrankLog[]
+
+  @@index([stack])
+}
+
+// Аудит кранков — для анти-чита и разбора спорных ситуаций (M4).
+model CrankLog {
+  id        String   @id @default(cuid())
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  playerId  String
+  at        BigInt // серверный epoch ms кранка
+  ok        Boolean // прошёл ли кранк валидацию фазы
+  phase     String // фаза на момент попытки
+  streak    Int // стрик после кранка
+  createdAt DateTime @default(now())
+
+  @@index([playerId, at])
+}
