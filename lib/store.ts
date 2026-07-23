@@ -53,6 +53,13 @@ export async function getStore(): Promise<Store> {
     const { PrismaStore } = await import("./store-prisma");
     _store = new PrismaStore();
   } else {
+    // Файловый стор — только для локальной разработки. На проде без DATABASE_URL
+    // файловая ФС эфемерна (Vercel) и стейт бы терялся → падаем с внятной ошибкой.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "DATABASE_URL не задан в production. Подключите Vercel Postgres (см. NOTES.md).",
+      );
+    }
     const { FileStore } = await import("./store-file");
     _store = new FileStore();
   }

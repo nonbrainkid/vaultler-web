@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# THE VAULTLER
 
-## Getting Started
+Мем-токен + ежедневный минигейм на Robinhood Chain (Arbitrum Orbit L2).
+Заводишь машину (CRANK) — она стакает $STACK, пока ты спишь. Вернулся в окно —
+стрик и множитель растут (компаунд). Проспал — приходит рейдер и скимит стек.
+Вайб: анти-трейдинг, про-стакинг. Пиксель-вестерн.
 
-First, run the development server:
+> **Не финансовый совет. Никакой кастодии средств. Только wallet-connect (чтение баланса + подпись для входа).**
 
+## Главный принцип: сервер — источник правды
+Стек, стрики и тайминги кранка считаются и хранятся **на сервере** (`lib/game.ts` + API).
+Клиент только рисует. Лидерборд раздаёт реальные токены — если бы состояние жило в браузере,
+любой накрутил бы себе топ. Подробности и решения — в [NOTES.md](NOTES.md).
+
+## Стек
+Next.js 16 (App Router) · TypeScript · Prisma (Postgres) · wagmi + viem · plain CSS (пиксель-арт).
+
+## Запуск локально
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local          # заполнять не обязательно для локали
+npm run dev                         # http://localhost:3000
+# быстрый демо-цикл петли (30с/15с вместо 24ч/12ч):
+GAME_MODE=demo npm run dev
+```
+Без `DATABASE_URL` используется файловый стор (`.data/players.json`) — БД не нужна для разработки.
+
+## Тесты
+```bash
+npm test          # юнит-тесты ядра механики (lib/game.ts)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Деплой на Vercel
+1. Создать проект на Vercel, подключить репозиторий.
+2. Storage → создать **Vercel Postgres**, он проставит `DATABASE_URL`.
+3. Выставить env (см. `.env.example`): обязательно `SESSION_SECRET`, а также реальные
+   `NEXT_PUBLIC_RH_*` и `NEXT_PUBLIC_VLTR_*` для сети/токена.
+4. Применить схему БД: `npx prisma db push` (или `prisma migrate deploy`) с прод `DATABASE_URL`.
+5. `npm run build` уже включает `prisma generate`. Деплой.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Майлстоуны
+- **M1** — server-authoritative ядро петли (crank/wind/streak/raider/tiers), БД, API.
+- **M2** — wallet-connect (SIWE-вход) + серверный буст ×1.5 за холд $VLTR.
+- **M3** — недельный лидерборд + коллективный «общий сейф».
+- **M4** — полировка, анти-чит, подготовка к деплою.
