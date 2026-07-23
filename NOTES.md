@@ -32,6 +32,14 @@
 `GAME_MODE=demo` в env → сжатые тайминги (WIND 30с / GRACE 15с / BASE 5) как в прототипе,
 чтобы тестировать петлю быстро. В проде переменная не выставляется → 24ч/12ч.
 
+## Идентичность / сессия (реализовано)
+- Сессия ставится в `proxy.ts` (Next 16 middleware→proxy) на НАВИГАЦИОННОМ ответе,
+  а не через fetch. Причина: некоторые браузеры (и наш preview-sandbox) не сохраняют
+  Set-Cookie из fetch-ответов; навигационные куки сохраняются везде. Заодно чинит гонку
+  двойного минта идентичности при dev-StrictMode.
+- Идентичность прокидывается в роут заголовком `x-vaultler-id` (proxy → route), cookie
+  подписана HMAC-SHA256 (Web Crypto, edge+node). Клиент не подделает чужой id.
+
 ## Открытые вопросы
 - [ ] **Баланс прода:** BASE_RATE_PER_SEC и пороги тиров под 24ч-петлю нужно калибровать
       (сейчас placeholder). Определиться, сколько стека даёт «идеальная неделя».
@@ -42,6 +50,20 @@
 ## Известные issues
 - `npm audit` показывает 3 уязвимости (postcss/sharp) — транзитивные из Next 16.
   «Фикс» откатывает Next до 9.x (неприемлемо). Ждём патч апстрима; наш код не затронут.
+- Build-варнинг Turbopack про «whole project traced» — от `FileStore` (fs/path).
+  Это dev-бэкенд; в проде используется Prisma. Не блокирует. На M4 можно закрыть импорт
+  файлового стора условием `NODE_ENV !== production`.
+- Скриншот-растр не снимается в текущем preview-sandbox (read_page/JS работают, capture — нет).
+  UI проверялся через DOM-дерево и computed styles. Открой http://localhost:3005 (`npm run dev`).
+
+## Для деплоя (M4, не забыть)
+- Vercel Postgres: создать БД, прокинуть `DATABASE_URL` → стор сам переключится на Prisma.
+- В build добавить `prisma generate` (клиент gitignore-нут): `"build": "prisma generate && next build"`.
+- Выставить стойкий `SESSION_SECRET` в env.
+- Rate-limit перевести на общий стор (сейчас память процесса).
 
 ## Лог майлстоунов
-- **M1 (в работе):** server-authoritative ядро петли, БД, API.
+- **M1 (готово):** server-authoritative ядро петли (crank/wind/streak/raider/tiers),
+  файловый+Prisma сторы, сессия через proxy, API, пиксель-вестерн UI. 14 юнит-тестов,
+  петля проверена end-to-end, прод-сборка проходит.
+- **M2 (след.):** wallet-connect на Robinhood Chain + буст ×1.5 за холд $VLTR.

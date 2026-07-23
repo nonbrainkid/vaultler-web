@@ -192,6 +192,10 @@ export interface PublicView {
   phase: Phase;
   tierIndex: number;
   tierName: string;
+  /** Порог, с которого начинается текущий тир (для прогресса заполнения монетами). */
+  tierAt: number;
+  /** Косметика: с этого тира монеты золотые (иначе серебряные). */
+  gold: boolean;
   nextTierAt: number | null;
   nextTierName: string | null;
   /** Мс до конца текущей фазы (winding/ready), иначе null. */
@@ -219,6 +223,8 @@ export function toPublicView(state: PlayerState, now: number): PublicView {
     phase: p,
     tierIndex: ti,
     tierName: TIERS[ti].name,
+    tierAt: TIERS[ti].at,
+    gold: TIERS[ti].gold,
     nextTierAt: next?.at ?? null,
     nextTierName: next?.name ?? null,
     phaseEndsInMs,

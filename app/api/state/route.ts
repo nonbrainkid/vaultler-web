@@ -6,22 +6,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { settle, toPublicView } from "@/lib/game";
 import { getStore } from "@/lib/store";
-import { attachSession, resolveIdentity } from "@/lib/http";
+import { resolveIdentity } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const r = resolveIdentity(req);
+  const identity = await resolveIdentity(req);
   const now = Date.now();
 
   const store = await getStore();
-  const stored = await store.read(r.identity, now);
+  const stored = await store.read(identity, now);
   const settled = settle(stored, now); // только для отображения, без записи
 
-  const res = NextResponse.json({
+  return NextResponse.json({
     view: toPublicView(settled.state, now),
     raid: settled.raid, // если игрок как раз простоял окно — покажем рейд
   });
-  return attachSession(res, r);
 }
