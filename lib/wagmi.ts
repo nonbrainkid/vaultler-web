@@ -1,13 +1,22 @@
-/** wagmi-конфиг (клиент). Своя кнопка коннекта — без сторонних модалов (React 19 + тема). */
+/**
+ * wagmi-конфиг (клиент). Своя кнопка коннекта — без сторонних модалов (React 19 + своя тема).
+ *
+ * Коннекторы: wagmi v2 сам находит установленные кошельки по EIP-6963 (MetaMask, Phantom,
+ * Rabby, OKX, Brave…) — они появятся в списке автоматически. Плюс явные таргеты ниже,
+ * чтобы кнопки были видны даже когда кошелёк ещё не установлен.
+ * WalletConnect/Coinbase SDK не тянем (лишние зависимости) — включим при projectId.
+ */
 import { createConfig, http } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { robinhoodChain } from "./chain";
 
-// M2: только injected (MetaMask / in-app браузеры кошельков) — без лишних зависимостей.
-// WalletConnect (внешний мобильный) и Coinbase добавим, когда будет projectId (см. NOTES.md).
 export const wagmiConfig = createConfig({
   chains: [robinhoodChain],
-  connectors: [injected()],
+  connectors: [
+    injected({ target: "metaMask" }),
+    injected({ target: "phantom" }),
+    injected(), // любой другой браузерный кошелёк + автоподхват EIP-6963
+  ],
   transports: { [robinhoodChain.id]: http() },
   ssr: true,
 });
