@@ -5,7 +5,7 @@
  */
 import { PrismaClient } from "./generated/prisma";
 import { initialState, type PlayerState } from "./game";
-import type { LeaderboardEntry, MutateOutcome, Store } from "./store";
+import type { MutateOutcome, PlayerSnapshot, Store } from "./store";
 
 // Синглтон клиента (иначе dev-hot-reload плодит подключения).
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
@@ -70,11 +70,8 @@ export class PrismaStore implements Store {
     });
   }
 
-  async leaderboard(limit: number): Promise<LeaderboardEntry[]> {
-    return prisma.player.findMany({
-      orderBy: { stack: "desc" },
-      take: limit,
-      select: { identity: true, stack: true, streak: true },
-    });
+  async snapshot(): Promise<PlayerSnapshot[]> {
+    const rows = (await prisma.player.findMany()) as (Row & { identity: string })[];
+    return rows.map((r) => ({ identity: r.identity, state: toState(r) }));
   }
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicView } from "@/lib/game";
 import Wallet from "./Wallet";
+import Leaderboard from "./Leaderboard";
 
 // Палитра пиксельного сейфа по тиру (косметика; авторитетный стек — с сервера).
 const VAULT_SKINS = [
@@ -43,6 +44,7 @@ function fmtLeft(ms: number): string {
 export default function Vault() {
   const [view, setView] = useState<PublicView | null>(null);
   const [wallet, setWallet] = useState<string | null>(null);
+  const [lbKey, setLbKey] = useState(0); // сигнал лидерборду перезагрузиться
   const [recvAt, setRecvAt] = useState(0); // Date.now() приёма ответа
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
@@ -78,7 +80,10 @@ export default function Vault() {
     setBusy(true);
     try {
       const r = await fetch("/api/crank", { method: "POST", cache: "no-store" });
-      if (r.ok) applyResponse((await r.json()) as CrankResponse);
+      if (r.ok) {
+        applyResponse((await r.json()) as CrankResponse);
+        setLbKey((k) => k + 1); // стек изменился — обновим лидерборд
+      }
     } catch {
       /* ignore */
     } finally {
@@ -330,15 +335,7 @@ export default function Vault() {
 
         <Wallet serverAddress={wallet} boost={view?.boost ?? false} onChanged={refetch} />
 
-        <div className="pool">
-          <div className="top">
-            <span className="lab">WEEKLY VAULT POOL</span>
-            <span className="amt">— VLTR</span>
-          </div>
-          <div className="subline">
-            Fed by <b>creator fees</b>. Top stackers split it. Live leaderboard lands in M3.
-          </div>
-        </div>
+        <Leaderboard refreshKey={lbKey} />
 
         <div className="foot">
           SERVER-AUTHORITATIVE · NOT FINANCIAL ADVICE · NO CUSTODY OF FUNDS

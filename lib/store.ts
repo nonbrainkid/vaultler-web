@@ -10,10 +10,9 @@
  */
 import type { PlayerState } from "./game";
 
-export interface LeaderboardEntry {
+export interface PlayerSnapshot {
   identity: string;
-  stack: number;
-  streak: number;
+  state: PlayerState;
 }
 
 export interface MutateOutcome<R> {
@@ -39,7 +38,11 @@ export interface Store {
     fn: (state: PlayerState) => MutateOutcome<R>,
   ): Promise<MutateOutcome<R>>;
 
-  leaderboard(limit: number): Promise<LeaderboardEntry[]>;
+  /**
+   * Все игроки со стейтами — для лидерборда и общего сейфа. Ранжирование/settle
+   * делает сервисный слой (lib/leaderboard.ts), стор только отдаёт сырые данные.
+   */
+  snapshot(): Promise<PlayerSnapshot[]>;
 }
 
 let _store: Store | null = null;

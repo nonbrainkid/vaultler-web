@@ -5,7 +5,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { initialState, type PlayerState } from "./game";
-import type { LeaderboardEntry, MutateOutcome, Store } from "./store";
+import type { MutateOutcome, PlayerSnapshot, Store } from "./store";
 
 export class FileStore implements Store {
   private data: Record<string, PlayerState> | null = null;
@@ -69,11 +69,11 @@ export class FileStore implements Store {
     });
   }
 
-  async leaderboard(limit: number): Promise<LeaderboardEntry[]> {
+  async snapshot(): Promise<PlayerSnapshot[]> {
     await this.ensureLoaded();
-    return Object.entries(this.data!)
-      .map(([identity, s]) => ({ identity, stack: s.stack, streak: s.streak }))
-      .sort((a, b) => b.stack - a.stack)
-      .slice(0, limit);
+    return Object.entries(this.data!).map(([identity, state]) => ({
+      identity,
+      state: { ...state },
+    }));
   }
 }

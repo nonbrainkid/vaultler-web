@@ -493,6 +493,70 @@ body {
   color: var(--sand);
 }
 
+/* ---- leaderboard / ledger ---- */
+.lbrows {
+  margin-top: 10px;
+  border-top: 2px solid var(--wood-darker);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.lbrow {
+  display: grid;
+  grid-template-columns: 26px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  background: #0e0904;
+  border: 2px solid #241608;
+  font-family: var(--read);
+  font-size: 16px;
+  color: var(--sand);
+}
+.lbrow.you {
+  border-color: var(--gold-lo);
+  background: #1c1206;
+  color: var(--gold-hi);
+}
+.lbrow.outside {
+  margin-top: 4px;
+  border-style: dashed;
+}
+.lbrank {
+  font-family: var(--pixel);
+  font-size: 9px;
+  color: var(--muted);
+  text-align: right;
+}
+.lbrow.you .lbrank {
+  color: var(--gold);
+}
+.lblabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lbstreak {
+  font-size: 14px;
+  color: var(--rust-hi);
+  min-width: 26px;
+  text-align: right;
+}
+.lbstack {
+  font-size: 17px;
+  color: var(--gold);
+  min-width: 54px;
+  text-align: right;
+}
+.lbempty {
+  font-family: var(--read);
+  font-size: 15px;
+  color: #6b5433;
+  text-align: center;
+  padding: 8px 0;
+}
+
 /* ---- footer ---- */
 .foot {
   text-align: center;
