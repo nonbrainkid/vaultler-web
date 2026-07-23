@@ -62,8 +62,21 @@
 - Выставить стойкий `SESSION_SECRET` в env.
 - Rate-limit перевести на общий стор (сейчас память процесса).
 
+## M2 — кошелёк и буст (реализовано)
+- wagmi + viem (connectkit несовместим с React 19 → своя кнопка коннекта в теме).
+- Коннектор: injected (MetaMask/in-app). WalletConnect/Coinbase добавим при projectId.
+- Вход: SIWE-стиль. `GET /api/auth/nonce` → подпись сообщения кошельком →
+  `POST /api/auth/verify` (viem verifyMessage) → идентичность = `wallet:<addr>` (один кошелёк = один аккаунт).
+- Буст ×1.5: сервер читает баланс $VLTR on-chain (`lib/vltr.ts`) и сам ставит `boost`.
+  Клиент буст НЕ задаёт (иначе накрутил бы холд). `DEV_FORCE_BOOST=1` — тест пути буста.
+- Проверено: SIWE end-to-end (valid→200 wallet-identity, битая подпись→401), буст→mult 1.5.
+
+### Env для M2 (в проде выставить реальные)
+- `NEXT_PUBLIC_RH_CHAIN_ID`, `NEXT_PUBLIC_RH_RPC_URL`, `NEXT_PUBLIC_RH_NAME`, `NEXT_PUBLIC_RH_EXPLORER`
+- `NEXT_PUBLIC_VLTR_ADDRESS`, `NEXT_PUBLIC_VLTR_DECIMALS`, `NEXT_PUBLIC_VLTR_BOOST_MIN`
+- `NEXT_PUBLIC_WC_PROJECT_ID` (опц., для WalletConnect), `DEV_FORCE_BOOST` (только dev)
+
 ## Лог майлстоунов
-- **M1 (готово):** server-authoritative ядро петли (crank/wind/streak/raider/tiers),
-  файловый+Prisma сторы, сессия через proxy, API, пиксель-вестерн UI. 14 юнит-тестов,
-  петля проверена end-to-end, прод-сборка проходит.
-- **M2 (след.):** wallet-connect на Robinhood Chain + буст ×1.5 за холд $VLTR.
+- **M1 (готово):** server-authoritative ядро петли, сторы, сессия через proxy, API, пиксель-UI.
+- **M2 (готово):** wallet-connect (wagmi), SIWE-вход, серверный буст ×1.5 за $VLTR.
+- **M3 (в работе):** недельный лидерборд + коллективный «общий сейф».

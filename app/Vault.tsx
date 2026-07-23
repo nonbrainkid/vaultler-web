@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicView } from "@/lib/game";
+import Wallet from "./Wallet";
 
 // Палитра пиксельного сейфа по тиру (косметика; авторитетный стек — с сервера).
 const VAULT_SKINS = [
@@ -17,6 +18,7 @@ const COIN_CAP = [10, 22, 40, 64, 90];
 interface StateResponse {
   view: PublicView;
   raid: { lost: number } | null;
+  wallet?: string | null;
 }
 interface CrankResponse extends StateResponse {
   ok: boolean;
@@ -40,6 +42,7 @@ function fmtLeft(ms: number): string {
 
 export default function Vault() {
   const [view, setView] = useState<PublicView | null>(null);
+  const [wallet, setWallet] = useState<string | null>(null);
   const [recvAt, setRecvAt] = useState(0); // Date.now() приёма ответа
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
@@ -56,6 +59,7 @@ export default function Vault() {
 
   const applyResponse = useCallback((data: StateResponse) => {
     setView(data.view);
+    if (data.wallet !== undefined) setWallet(data.wallet);
     setRecvAt(Date.now());
     if (data.raid && data.raid.lost > 0) triggerFlash();
   }, []);
@@ -324,15 +328,7 @@ export default function Vault() {
           <span className="hint">{crankHint}</span>
         </button>
 
-        <div className="boost">
-          <div className="txt">
-            <b>Holding $VLTR</b> boosts your stacking rate ×1.5. Connect a wallet to unlock —
-            coming with the machine room (M2).
-          </div>
-          <button className="toggle" disabled aria-disabled="true">
-            SOON
-          </button>
-        </div>
+        <Wallet serverAddress={wallet} boost={view?.boost ?? false} onChanged={refetch} />
 
         <div className="pool">
           <div className="top">

@@ -427,6 +427,39 @@ body {
   outline: 3px solid var(--parchment);
   outline-offset: 2px;
 }
+.toggle:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ---- wallet ---- */
+.wallet {
+  flex-wrap: wrap;
+}
+.wbtns {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bpill {
+  display: inline-block;
+  margin-top: 6px;
+  font-family: var(--pixel);
+  font-size: 8px;
+  padding: 5px 7px;
+  color: var(--muted);
+  border: 2px solid var(--wood-darker);
+  background: #0e0904;
+}
+.bpill.on {
+  color: var(--wood-darker);
+  background: var(--gold);
+  border-color: var(--gold-hi);
+}
+.werr {
+  color: var(--rust-hi);
+}
 
 .pool {
   padding: 12px 13px;

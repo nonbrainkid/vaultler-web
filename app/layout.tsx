@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Press_Start_2P, VT323 } from "next/font/google";
 import "./globals.css";
+import { Providers } from "./providers";
 
 // Пиксельные шрифты: заголовки — Press Start 2P, тело/цифры — VT323 (читаемый пиксель-моно).
 const pixel = Press_Start_2P({
@@ -35,7 +36,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${pixel.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

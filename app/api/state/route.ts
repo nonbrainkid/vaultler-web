@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { settle, toPublicView } from "@/lib/game";
 import { getStore } from "@/lib/store";
 import { resolveIdentity } from "@/lib/http";
+import { addressFromIdentity } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,5 +23,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     view: toPublicView(settled.state, now),
     raid: settled.raid, // если игрок как раз простоял окно — покажем рейд
+    wallet: addressFromIdentity(identity), // адрес, если сессия привязана к кошельку
   });
 }
