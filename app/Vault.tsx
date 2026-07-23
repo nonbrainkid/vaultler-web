@@ -45,6 +45,7 @@ export default function Vault({ onStackChanged }: { onStackChanged?: () => void 
   const [recvAt, setRecvAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
+  const [netErr, setNetErr] = useState(false);
   const flashRef = useRef<HTMLDivElement>(null);
   const chamberRef = useRef<HTMLDivElement>(null);
   const reduced = useRef(false);
@@ -66,9 +67,12 @@ export default function Vault({ onStackChanged }: { onStackChanged?: () => void 
   const refetch = useCallback(async () => {
     try {
       const r = await fetch("/api/state", { cache: "no-store" });
-      if (r.ok) applyResponse(await r.json());
+      if (!r.ok) throw new Error("bad status");
+      applyResponse(await r.json());
+      setNetErr(false);
     } catch {
-      /* оффлайн — оставляем последнее состояние */
+      // оффлайн/сервер лёг — показываем баннер, последнее состояние оставляем на экране
+      setNetErr(true);
     }
   }, [applyResponse]);
 
@@ -77,12 +81,12 @@ export default function Vault({ onStackChanged }: { onStackChanged?: () => void 
     setBusy(true);
     try {
       const r = await fetch("/api/crank", { method: "POST", cache: "no-store" });
-      if (r.ok) {
-        applyResponse((await r.json()) as CrankResponse);
-        onStackChanged?.();
-      }
+      if (!r.ok) throw new Error("crank failed");
+      applyResponse((await r.json()) as CrankResponse);
+      setNetErr(false);
+      onStackChanged?.();
     } catch {
-      /* ignore */
+      setNetErr(true);
     } finally {
       setBusy(false);
     }
@@ -189,7 +193,19 @@ export default function Vault({ onStackChanged }: { onStackChanged?: () => void 
     <>
       <div className="flash" ref={flashRef} aria-hidden="true" />
 
-      <div className="game-grid">
+      {netErr && (
+        <div className="netbanner" role="alert">
+          <span>
+            Can&apos;t reach the machine. Your stack is safe on the server — nothing is
+            lost.
+          </span>
+          <button className="btn btn-ghost sm" onClick={refetch}>
+            RETRY
+          </button>
+        </div>
+      )}
+
+      <div className="game-grid" aria-busy={!view}>
         <div className="game-main">
           <div className="tierbar">
             <div className="tier-name">
@@ -339,10 +355,11 @@ export default function Vault({ onStackChanged }: { onStackChanged?: () => void 
           <div className="card rules">
             <h3 className="card-h">THE RULES</h3>
             <ul className="rules-list">
-              <li>Crank once per cycle to keep stacking.</li>
+              <li>One cycle is 24h — crank once a day.</li>
               <li>Crank inside the window → streak +1, multiplier up.</li>
               <li>Miss it → raider skims your stack, streak resets.</li>
               <li>Top of the weekly board splits the pot.</li>
+              <li>No wallet needed to play — connect only for the ×1.5.</li>
             </ul>
           </div>
         </aside>

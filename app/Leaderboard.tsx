@@ -32,13 +32,16 @@ function fmtWeek(ms: number): string {
 
 export default function Leaderboard({ refreshKey }: { refreshKey: number }) {
   const [lb, setLb] = useState<LeaderboardView | null>(null);
+  const [failed, setFailed] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/leaderboard", { cache: "no-store" });
-      if (r.ok) setLb(await r.json());
+      if (!r.ok) throw new Error("bad status");
+      setLb(await r.json());
+      setFailed(false);
     } catch {
-      /* оставляем прошлые данные */
+      setFailed(true); // прошлые данные оставляем на экране
     }
   }, []);
 
@@ -71,8 +74,25 @@ export default function Leaderboard({ refreshKey }: { refreshKey: number }) {
         <b>{lb ? fmtWeek(lb.week.endsInMs) : "—"}</b> · <b>{lb?.players ?? 0}</b> stackers
       </div>
 
-      <div className="lbrows">
-        {lb && lb.top.length > 0 ? (
+      {failed && (
+        <p className="lb-err" role="alert">
+          Board is out of reach right now — showing the last snapshot.
+        </p>
+      )}
+
+      <div className="lbrows" aria-busy={!lb}>
+        {!lb && !failed ? (
+          <>
+            {[0, 1, 2].map((i) => (
+              <div className="lbrow skeleton" key={i} aria-hidden="true">
+                <span className="lbrank">–</span>
+                <span className="lblabel">loading…</span>
+                <span className="lbstreak" />
+                <span className="lbstack">—</span>
+              </div>
+            ))}
+          </>
+        ) : lb && lb.top.length > 0 ? (
           lb.top.map((r) => (
             <div key={r.rank} className={"lbrow" + (r.isYou ? " you" : "")}>
               <span className="lbrank">{r.rank}</span>

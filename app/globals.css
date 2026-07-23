@@ -87,6 +87,24 @@ body {
   padding: 0 16px;
 }
 
+/* доступность: ссылка «к содержимому» для клавиатуры */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  font-family: var(--pixel);
+  font-size: 10px;
+  padding: 12px 14px;
+  background: var(--neon);
+  color: #0c1a06;
+  border: 3px solid var(--wood-darker);
+}
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+}
+
 /* ───────────── buttons ───────────── */
 .btn {
   display: inline-flex;
@@ -124,6 +142,17 @@ body {
 }
 .btn.wide {
   width: 100%;
+}
+/* пальцем по маленькой кнопке не попасть — гарантируем 44px там, где вероятно касание
+   (тач-устройства и узкие экраны; эмуляторы часто рапортуют мышь, поэтому оба условия) */
+@media (pointer: coarse), (max-width: 899px) {
+  .btn {
+    min-height: 44px;
+  }
+  .btn.sm {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 .btn-neon {
@@ -635,7 +664,7 @@ body {
   text-align: center;
   padding: 0 16px;
   font-size: 15px;
-  color: #6b5433;
+  color: var(--muted);
   line-height: 1.3;
 }
 
@@ -730,12 +759,12 @@ body {
 }
 .crank:disabled {
   cursor: default;
-  color: #6b5433;
+  color: var(--muted);
   background: linear-gradient(180deg, #3a3a30, #2a2a22);
   box-shadow: 0 5px 0 0 #17170f;
 }
 .crank:disabled .hint {
-  color: #5c4835;
+  color: #b0a48c; /* читаемо на серой заглушке кнопки */
 }
 .crank.danger {
   color: #1a0a06;
@@ -846,7 +875,7 @@ body {
 }
 .lbempty {
   font-size: 15px;
-  color: #6b5433;
+  color: var(--muted);
   text-align: center;
   padding: 10px 0;
 }
@@ -889,7 +918,7 @@ body {
   word-break: break-all;
 }
 .modal-note.dim {
-  color: #7a6244;
+  color: var(--muted);
   font-size: 14px;
   margin-top: 8px;
 }
@@ -937,8 +966,184 @@ body {
 .footer-meta {
   margin-top: 14px;
   font-family: var(--pixel);
-  font-size: 7px;
-  color: #5c4835;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+/* ───────────── mobile nav ───────────── */
+.burger {
+  font-size: 14px;
+  padding: 10px 12px;
+}
+.mobile-nav {
+  border-top: 3px solid var(--wood-darker);
+  background: var(--ink);
+  padding: 12px 16px 18px;
+  display: grid;
+  gap: 4px;
+}
+.mobile-nav a {
+  font-family: var(--pixel);
+  font-size: 11px;
+  color: var(--bone);
+  text-decoration: none;
+  padding: 14px 6px;
+  border-bottom: 2px solid var(--wood-darker);
+}
+.mobile-nav a:hover,
+.mobile-nav a:focus-visible {
+  color: var(--neon);
+}
+.mobile-nav-socials {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* ───────────── honest status ───────────── */
+.status-card {
+  margin-top: 16px;
+}
+.status-list {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.status-item {
+  display: grid;
+  grid-template-columns: 12px 68px 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 10px;
+  background: #0d0904;
+  border: 2px solid var(--wood-darker);
+  font-size: 16px;
+}
+.status-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  background: var(--muted);
+}
+.status-item.live .status-dot {
+  background: var(--neon);
+  box-shadow: 0 0 10px rgba(140, 255, 90, 0.6);
+}
+.status-item.wip .status-dot {
+  background: var(--gold);
+}
+.status-item.todo .status-dot {
+  background: var(--rust-hi);
+}
+.status-flag {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--muted);
+  padding-top: 3px;
+}
+.status-item.live .status-flag {
+  color: var(--neon);
+}
+.status-item.wip .status-flag {
+  color: var(--gold);
+}
+.status-item.todo .status-flag {
+  color: var(--rust-hi);
+}
+.status-t {
+  color: var(--bone);
+}
+.status-d {
+  grid-column: 3;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* ───────────── faq ───────────── */
+.faq {
+  display: grid;
+  gap: 8px;
+}
+.faq-item {
+  background: var(--ink);
+  border: 3px solid var(--wood-darker);
+}
+.faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.faq-item summary:focus-visible {
+  outline: 3px solid var(--neon);
+  outline-offset: -3px;
+}
+.faq-q {
+  font-size: 17px;
+  color: var(--bone);
+}
+.faq-mark {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  position: relative;
+}
+.faq-mark::before,
+.faq-mark::after {
+  content: "";
+  position: absolute;
+  background: var(--neon);
+}
+.faq-mark::before {
+  left: 0;
+  top: 6px;
+  width: 14px;
+  height: 3px;
+}
+.faq-mark::after {
+  left: 6px;
+  top: 0;
+  width: 3px;
+  height: 14px;
+  transition: opacity 0.12s;
+}
+.faq-item[open] .faq-mark::after {
+  opacity: 0;
+}
+.faq-a {
+  padding: 0 14px 15px;
+  color: var(--sand);
+  font-size: 16px;
+}
+
+/* ───────────── network states ───────────── */
+.netbanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  background: #1e0d08;
+  border: 3px solid var(--rust);
+  color: var(--rust-hi);
+  font-size: 16px;
+}
+.lb-err {
+  margin-top: 10px;
+  color: var(--rust-hi);
+  font-size: 15px;
+}
+.lbrow.skeleton {
+  opacity: 0.45;
+  color: var(--muted);
 }
 
 /* raid flash */
@@ -985,6 +1190,15 @@ body {
   }
   .site-nav {
     display: flex;
+  }
+  .burger {
+    display: none; /* на десктопе есть полноценное меню */
+  }
+  .status-item {
+    grid-template-columns: 12px 68px 200px 1fr;
+  }
+  .status-d {
+    grid-column: auto;
   }
   .hero {
     padding: 64px 0 60px;
