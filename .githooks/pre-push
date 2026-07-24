@@ -1,0 +1,12 @@
+#!/bin/sh
+# Аудит безопасности перед каждым пушем. Блокирует пуш, если наружу поедет лишнее.
+# Включается один раз: git config core.hooksPath .githooks
+#
+# Обойти в исключительном случае: git push --no-verify (не делай этого без причины).
+
+echo "→ pre-push: аудит секретов"
+if ! node scripts/check-secrets.mjs; then
+  echo "Пуш остановлен: аудит безопасности не пройден."
+  exit 1
+fi
+exit 0

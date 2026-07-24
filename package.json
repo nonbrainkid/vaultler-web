@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "check:secrets": "node scripts/check-secrets.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

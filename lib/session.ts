@@ -12,7 +12,26 @@
  */
 
 export const SESSION_COOKIE = "vaultler_sid";
-const SECRET = process.env.SESSION_SECRET ?? "dev-insecure-secret-change-me";
+
+/**
+ * Дефолт допустим ТОЛЬКО локально. В проде он был бы публично известен из репозитория:
+ * зная его, любой подделает подпись cookie и выдаст себя за чужого игрока — включая
+ * кошельковые аккаунты на борде, который делит реальные токены. Поэтому падаем явно.
+ *
+ * Проверка ленивая (на момент использования, а не импорта): при `next build`
+ * NODE_ENV=production, но рантайм-секрета там ещё нет — сборка не должна падать.
+ */
+function getSecret(): string {
+  const fromEnv = process.env.SESSION_SECRET;
+  if (fromEnv && fromEnv.length >= 16) return fromEnv;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "SESSION_SECRET не задан (или короче 16 символов) в production. " +
+        "Сгенерируйте: openssl rand -base64 32",
+    );
+  }
+  return "dev-insecure-secret-change-me";
+}
 const enc = new TextEncoder();
 
 function base64url(bytes: Uint8Array): string {
@@ -24,7 +43,7 @@ function base64url(bytes: Uint8Array): string {
 async function hmac(message: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
-    enc.encode(SECRET),
+    enc.encode(getSecret()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
