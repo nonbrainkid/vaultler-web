@@ -590,18 +590,46 @@ body {
   flex: 0 0 118px;
   width: 118px;
 }
-.vault svg {
+.vault svg,
+.safe-sprite {
   display: block;
   width: 100%;
   height: auto;
-  filter: drop-shadow(0 0 8px rgba(140, 255, 90, 0.25));
 }
+
+/* фирменное свечение сейфа — как на артах бренда */
+.safe-sprite {
+  filter: drop-shadow(0 0 5px rgba(140, 255, 90, 0.35))
+    drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
+  transition: filter 0.3s;
+}
+.safe-sprite.is-spinning {
+  animation: safeGlow 2.6s ease-in-out infinite;
+}
+@keyframes safeGlow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 5px rgba(140, 255, 90, 0.35))
+      drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
+  }
+  50% {
+    filter: drop-shadow(0 0 13px rgba(140, 255, 90, 0.75))
+      drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
+  }
+}
+/* зарейженный сейф — обесцвечен и отдаёт ржавчиной, свечение погасло */
+.safe-sprite.is-stalled {
+  filter: saturate(0.35) brightness(0.72)
+    drop-shadow(0 0 7px rgba(176, 58, 36, 0.55));
+}
+
 .dial {
   transform-box: fill-box;
   transform-origin: center;
 }
-.winding .dial {
-  animation: spin 3.2s linear infinite;
+/* крутим ступенями — механический, «пиксельный» ход вместо гладкого скольжения */
+.safe-sprite.is-spinning .dial {
+  animation: spin 4s steps(16) infinite;
 }
 @keyframes spin {
   to {
@@ -1265,7 +1293,8 @@ body {
   html {
     scroll-behavior: auto;
   }
-  .winding .dial,
+  .safe-sprite.is-spinning,
+  .safe-sprite.is-spinning .dial,
   .flash.go,
   .drop,
   .status.ready {

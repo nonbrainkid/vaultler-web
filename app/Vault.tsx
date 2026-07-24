@@ -3,15 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicView } from "@/lib/game";
 import ConnectButton from "./components/ConnectButton";
-
-// Палитра пиксельного сейфа по тиру (косметика; авторитетный стек — с сервера).
-const VAULT_SKINS = [
-  { body: "#7a7a72", trim: "#3e3e38", face: "#9a9a90" }, // TIN CAN
-  { body: "#7a4a28", trim: "#2a1a10", face: "#a36636" }, // SAFE
-  { body: "#5c6b64", trim: "#2f3330", face: "#7d8f86" }, // VAULT
-  { body: "#46504a", trim: "#8a5a10", face: "#5c6772" }, // FORT
-  { body: "#caa23e", trim: "#8a5a10", face: "#ffd95a" }, // GOLD RESERVE
-];
+import SafeSprite from "./components/SafeSprite";
 
 const COIN_CAP = [10, 22, 40, 64, 90];
 
@@ -147,8 +139,6 @@ export default function Vault({ onStackChanged }: { onStackChanged?: () => void 
     setTimeout(() => drop.remove(), 520);
   }, [now, view]);
 
-  const skin = VAULT_SKINS[view?.tierIndex ?? 0];
-
   const coinCount = useMemo(() => {
     if (!view || d == null || d.stack <= 0) return 0;
     const cap = COIN_CAP[view.tierIndex];
@@ -233,29 +223,12 @@ export default function Vault({ onStackChanged }: { onStackChanged?: () => void 
 
           <div className={machineClass}>
             <div className="machine-top">
-              <div className="vault" aria-hidden="true">
-                <svg viewBox="0 0 128 128" shapeRendering="crispEdges">
-                  <rect x="10" y="14" width="108" height="100" fill={skin.trim} />
-                  <rect x="16" y="20" width="96" height="88" fill={skin.body} />
-                  {[
-                    [24, 28],
-                    [98, 28],
-                    [24, 96],
-                    [98, 96],
-                  ].map(([x, y], i) => (
-                    <rect key={i} x={x} y={y} width="6" height="6" fill={skin.trim} />
-                  ))}
-                  <rect x="34" y="34" width="60" height="60" fill={skin.face} />
-                  <g className="dial">
-                    <rect x="44" y="44" width="40" height="40" fill={skin.trim} />
-                    <rect x="50" y="50" width="28" height="28" fill={skin.body} />
-                    <rect x="62" y="38" width="4" height="14" fill={skin.trim} />
-                    <rect x="62" y="76" width="4" height="14" fill={skin.trim} />
-                    <rect x="38" y="62" width="14" height="4" fill={skin.trim} />
-                    <rect x="76" y="62" width="14" height="4" fill={skin.trim} />
-                    <rect x="59" y="59" width="10" height="10" fill={skin.face} />
-                  </g>
-                </svg>
+              <div className="vault">
+                <SafeSprite
+                  tier={view?.tierIndex ?? 0}
+                  spinning={phase === "winding"}
+                  stalled={phase === "stall"}
+                />
               </div>
 
               <div className="chamber" ref={chamberRef}>
