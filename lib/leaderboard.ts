@@ -27,7 +27,7 @@ export function weekInfo(now: number): WeekInfo {
 export interface LeaderRow {
   rank: number;
   label: string;
-  kind: "wallet" | "anon";
+  kind: "wallet" | "anon" | "bot";
   stack: number;
   streak: number;
   isYou: boolean;
@@ -45,7 +45,12 @@ function shortAddr(a: string): string {
   return a.slice(0, 6) + "…" + a.slice(-4);
 }
 
-function labelFor(identity: string): { label: string; kind: "wallet" | "anon" } {
+function labelFor(identity: string): { label: string; kind: "wallet" | "anon" | "bot" } {
+  // Засеянные для тестов боты (scripts/seed-bots.mjs) помечаются явно: борд когда-нибудь
+  // будет делить реальные токены, и неотличимые фейки на нём — это дыра в честности.
+  if (identity.startsWith("bot:")) {
+    return { label: identity.slice("bot:".length), kind: "bot" };
+  }
   const addr = addressFromIdentity(identity);
   return addr ? { label: shortAddr(addr), kind: "wallet" } : { label: "anon", kind: "anon" };
 }

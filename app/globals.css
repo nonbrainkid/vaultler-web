@@ -1003,6 +1003,17 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* засеянные боты помечены явно — чтобы их не путали с реальными игроками */
+.botmark {
+  font-family: var(--pixel);
+  font-size: 6px;
+  font-style: normal;
+  color: var(--muted);
+  border: 1px solid var(--wood);
+  padding: 2px 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
 .lbstreak {
   font-size: 14px;
   color: var(--rust-hi);

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 interface LeaderRow {
   rank: number;
   label: string;
-  kind: "wallet" | "anon";
+  kind: "wallet" | "anon" | "bot";
   stack: number;
   streak: number;
   isYou: boolean;
@@ -108,6 +108,7 @@ export default function Leaderboard({
               <span className="lblabel">
                 {r.label}
                 {r.isYou ? " (you)" : ""}
+                {r.kind === "bot" && <em className="botmark">test</em>}
               </span>
               <span className="lbstreak">×{r.streak}</span>
               <span className="lbstack">{fmt(r.stack)}</span>
