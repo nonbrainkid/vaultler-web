@@ -56,6 +56,27 @@
 - Скриншот-растр не снимается в текущем preview-sandbox (read_page/JS работают, capture — нет).
   UI проверялся через DOM-дерево и computed styles. Открой http://localhost:3005 (`npm run dev`).
 
+## Готовность к запуску (сделано автономно 2026-07-24)
+- **CSP с nonce (прод):** `proxy.ts` выдаёт per-request nonce, строгий `script-src
+  'self' 'nonce' 'strict-dynamic'` — барьер против внедрения дрейнер-скрипта через XSS.
+  Проверено на прод-сборке: сайт гидрируется, 0 нарушений. Лендинг переведён в
+  `force-dynamic` (иначе статический HTML не может получить per-request nonce).
+  В dev CSP ослаблен (Turbopack HMR требует eval/inline).
+- **SEO:** `app/robots.ts`, `app/sitemap.ts`, OG-картинка, брендовый фавикон, мета.
+- **Устойчивость:** `app/error.tsx`, `app/global-error.tsx` (границы ошибок),
+  `app/not-found.tsx`, баннеры сетевых ошибок в игре и борде.
+- **Мониторинг:** `GET /api/health` — проверка стора + флаги конфигурации.
+
+## Осталось на Егора перед реальным запуском
+- **Деплой на Vercel** (см. README): нужен его аккаунт + Vercel Postgres + env.
+- **Реальный конфиг Robinhood Chain** (chainId/RPC/адрес $VLTR) — подставить в env.
+- **Rate-limit → общий стор (Upstash/Vercel KV):** сейчас в памяти процесса, на Vercel
+  serverless не шарится между инстансами. Для борда с реальными деньгами это надо закрыть.
+- **Убрать тестовых ботов:** `node scripts/seed-bots.mjs --clear`.
+- **Политика выплат пула** — реальные токены, решение и исполнение за Егором (не автоматизирую).
+- **Баланс прода** (BASE_RATE/пороги тиров) — сейчас разумные плейсхолдеры, откалибровать по вкусу.
+- **GitHub-организация + перенос репо** — создать орг может только владелец (я не создаю аккаунты).
+
 ## Для деплоя (M4, не забыть)
 - Vercel Postgres: создать БД, прокинуть `DATABASE_URL` → стор сам переключится на Prisma.
 - В build добавить `prisma generate` (клиент gitignore-нут): `"build": "prisma generate && next build"`.

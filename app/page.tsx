@@ -7,6 +7,10 @@ import TrustSection from "./components/TrustSection";
 import Faq from "./components/Faq";
 import SiteFooter from "./components/SiteFooter";
 
+// Динамический рендер: нужен для per-request nonce в строгом CSP (статический HTML
+// собирается один раз и nonce получить не может). Страница лёгкая, стоимость мала.
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return (
     <>

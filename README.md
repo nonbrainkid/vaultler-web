@@ -56,13 +56,33 @@ git config core.hooksPath .githooks   # выполнить один раз по�
   иначе подпись сессионных cookie шла бы публично известным ключом из репозитория.
 - Перед реальным запуском убрать тестовых ботов: `node scripts/seed-bots.mjs --clear`.
 
-## Деплой на Vercel
-1. Создать проект на Vercel, подключить репозиторий.
-2. Storage → создать **Vercel Postgres**, он проставит `DATABASE_URL`.
-3. Выставить env (см. `.env.example`): обязательно `SESSION_SECRET`, а также реальные
-   `NEXT_PUBLIC_RH_*` и `NEXT_PUBLIC_VLTR_*` для сети/токена.
-4. Применить схему БД: `npx prisma db push` (или `prisma migrate deploy`) с прод `DATABASE_URL`.
-5. `npm run build` уже включает `prisma generate`. Деплой.
+## Деплой на Vercel — пошагово (runbook)
+
+Код готов к деплою. Нужны только твой аккаунт Vercel и реальные значения сети/токена.
+
+1. **Проект.** Vercel → Add New → Project → импортировать `vaultler-web`. Framework
+   определится как Next.js. Build/Output — по умолчанию (`npm run build` уже включает
+   `prisma generate`).
+2. **База.** Vercel → Storage → Create → **Postgres** → привязать к проекту. Он сам
+   проставит `DATABASE_URL` в env проекта.
+3. **Env** (Project → Settings → Environment Variables), см. `.env.example`:
+   - `SESSION_SECRET` — **обязательно**. Сгенерировать: `openssl rand -base64 32`.
+     Без него прод намеренно падает (защита от подделки сессий).
+   - `AUTH_DOMAIN` — домен сайта без схемы (напр. `vaultler-web.vercel.app` или свой).
+   - `NEXT_PUBLIC_SITE_URL` — полный URL (для OG/sitemap/robots).
+   - `NEXT_PUBLIC_RH_*` и `NEXT_PUBLIC_VLTR_*` — реальные chainId/RPC/адрес токена,
+     когда будут (до этого буст просто не активируется, играть можно).
+   - НЕ выставлять `GAME_MODE` и `DEV_FORCE_BOOST` в проде.
+4. **Схема БД.** Один раз, с прод `DATABASE_URL` в окружении:
+   ```bash
+   npx prisma db push
+   ```
+5. **Деплой.** Push в `main` (или Deploy в UI). После деплоя проверить:
+   ```bash
+   curl https://<домен>/api/health      # {"ok":true, store:"postgres", sessionSecret:"set"}
+   ```
+6. **Перед публичным запуском:** `node scripts/seed-bots.mjs --clear` (если гонял ботов
+   на общей БД), и включить общий rate-limit стор (Upstash/Vercel KV) — см. NOTES.md.
 
 ## Майлстоуны
 - **M1** — server-authoritative ядро петли (crank/wind/streak/raider/tiers), БД, API.
