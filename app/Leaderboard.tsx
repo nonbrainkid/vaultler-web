@@ -35,8 +35,8 @@ export default function Leaderboard({
   onRank,
 }: {
   refreshKey: number;
-  /** Сообщаем ранг наверх — от него зависит скин сейфа в игре. */
-  onRank?: (rank: number | null) => void;
+  /** Ранг и размер комьюнити наверх — от них зависит скин сейфа в игре. */
+  onRank?: (rank: number | null, players: number) => void;
 }) {
   const [lb, setLb] = useState<LeaderboardView | null>(null);
   const [failed, setFailed] = useState(false);
@@ -48,7 +48,7 @@ export default function Leaderboard({
       const data: LeaderboardView = await r.json();
       setLb(data);
       setFailed(false);
-      onRank?.(data.you?.rank ?? null);
+      onRank?.(data.you?.rank ?? null, data.players ?? 0);
     } catch {
       setFailed(true); // прошлые данные оставляем на экране
     }

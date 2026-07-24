@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicView } from "@/lib/game";
 import ConnectButton from "./components/ConnectButton";
-import SafeSprite, { RANK_SKINS, rankLevel } from "./components/SafeSprite";
+import SafeSprite from "./components/SafeSprite";
+import { RANK_SKINS, rankLevel, nextSkin } from "@/lib/skins";
 
 const COIN_CAP = [10, 22, 40, 64, 90];
 
@@ -33,10 +34,13 @@ function fmtLeft(ms: number): string {
 
 export default function Vault({
   rank = null,
+  players = 0,
   onStackChanged,
 }: {
   /** Место в недельном борде — определяет скин сейфа. */
   rank?: number | null;
+  /** Размер комьюнити — от него зависит, какие скины вообще открыты. */
+  players?: number;
   onStackChanged?: () => void;
 }) {
   const [view, setView] = useState<PublicView | null>(null);
@@ -154,7 +158,8 @@ export default function Vault({
     return Math.max(4, Math.round(cap * prog));
   }, [view, d]);
 
-  const skinLevel = rankLevel(rank);
+  const skinLevel = rankLevel(rank, players);
+  const goal = nextSkin(skinLevel, players);
   const phase = view?.phase ?? "off";
   const machineClass =
     "machine" + (phase === "winding" ? " winding" : "") + (phase === "stall" ? " stalled" : "");
@@ -240,6 +245,13 @@ export default function Vault({
                 <div className="skin-tag">
                   <b>{RANK_SKINS[skinLevel].label}</b>
                   <span>{RANK_SKINS[skinLevel].hint}</span>
+                  {goal && (
+                    <span className="skin-next">
+                      {goal.unlocked
+                        ? `next: ${goal.label}`
+                        : `${goal.label} at ${goal.unlockAt + 1}+ stackers`}
+                    </span>
+                  )}
                 </div>
               </div>
 

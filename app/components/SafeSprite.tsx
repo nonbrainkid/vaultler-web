@@ -7,7 +7,10 @@
  *
  * Почему не картинка: сетки строятся один раз в модуле, диск вынесен в отдельную
  * группу и крутится при заводе. Растровый спрайт так не оживить, и он бы мылился.
+ *
+ * Логика рангов живёт в lib/skins.ts (чистая, покрыта тестами) — здесь только отрисовка.
  */
+import { RANK_SKINS } from "@/lib/skins";
 
 type Key = "." | "K" | "D" | "S" | "L" | "P" | "B" | "N" | "G" | "Y" | "H" | "M";
 
@@ -221,27 +224,6 @@ function toRuns(g: Key[][]): Run[] {
   return runs;
 }
 
-// ── ранги ──
-export const RANK_SKINS = [
-  { label: "ROOKIE SAFE", hint: "unranked" },
-  { label: "TOP 1000", hint: "bronze plating" },
-  { label: "TOP 500", hint: "silver plating" },
-  { label: "TOP 100", hint: "gold cornice" },
-  { label: "TOP 10", hint: "crowned in gold" },
-  { label: "#1 VAULT", hint: "the crown itself" },
-] as const;
-
-/** Ранг → уровень скина. Вне топ-1000 (или без ранга) — базовый сейф. */
-export function rankLevel(rank: number | null | undefined): number {
-  if (rank == null) return 0;
-  if (rank <= 1) return 5;
-  if (rank <= 10) return 4;
-  if (rank <= 100) return 3;
-  if (rank <= 500) return 2;
-  if (rank <= 1000) return 1;
-  return 0;
-}
-
 type Palette = Record<Exclude<Key, ".">, string>;
 
 const PALETTES: Palette[] = [
@@ -263,22 +245,31 @@ const PALETTES: Palette[] = [
 const BODY_RUNS = PALETTES.map((_, level) => toRuns(buildBody(level)));
 const DIAL_RUNS = toRuns(buildDial());
 
+// Силуэт для ещё не открытых скинов: форма видна, материал — нет.
+const LOCKED_FILL: Record<Exclude<Key, ".">, string> = {
+  K: "#0b0805", D: "#241d16", S: "#332a20", L: "#3d3227", P: "#2b241b",
+  B: "#3d3227", N: "#2f3a28", G: "#3d3227", Y: "#4a3d2f", H: "#241d16", M: "#2f3a28",
+};
+
 export default function SafeSprite({
   level = 0,
   spinning = false,
   stalled = false,
+  locked = false,
 }: {
   level?: number;
   spinning?: boolean;
   stalled?: boolean;
+  /** Скин ещё не открыт по размеру комьюнити — показываем тёмный силуэт. */
+  locked?: boolean;
 }) {
   const lv = Math.max(0, Math.min(level, PALETTES.length - 1));
-  const pal = PALETTES[lv];
+  const pal = locked ? LOCKED_FILL : PALETTES[lv];
   const cls =
     "safe-sprite" +
     (spinning ? " is-spinning" : "") +
     (stalled ? " is-stalled" : "") +
-    (lv >= 4 ? " is-elite" : "");
+    (locked ? " is-locked" : lv >= 4 ? " is-elite" : "");
 
   return (
     <svg
@@ -286,7 +277,11 @@ export default function SafeSprite({
       viewBox="0 0 32 32"
       shapeRendering="crispEdges"
       role="img"
-      aria-label={`${RANK_SKINS[lv].label} vault${stalled ? ", stalled" : spinning ? ", winding" : ""}`}
+      aria-label={
+        locked
+          ? `${RANK_SKINS[lv].label} vault — locked`
+          : `${RANK_SKINS[lv].label} vault${stalled ? ", stalled" : spinning ? ", winding" : ""}`
+      }
     >
       {BODY_RUNS[lv].map((r, i) => (
         <rect key={i} x={r.x} y={r.y} width={r.w} height={1} fill={pal[r.k]} />

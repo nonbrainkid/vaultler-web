@@ -416,7 +416,18 @@ body {
   margin-bottom: 16px;
 }
 .skins-lead {
+  margin-bottom: 10px;
+}
+.skins-rule {
   margin-bottom: 16px;
+  padding: 10px 12px;
+  background: #0d0904;
+  border-left: 3px solid var(--neon);
+  font-size: 15px;
+  color: var(--muted);
+}
+.skins-rule b {
+  color: var(--neon);
 }
 .skin-grid {
   display: grid;
@@ -445,6 +456,32 @@ body {
 .skin-card span {
   font-size: 13px;
   color: var(--muted);
+}
+/* закрытый скин: силуэт вместо материала + условие открытия */
+.skin-card.locked {
+  border-style: dashed;
+  border-color: var(--wood);
+}
+.skin-card.locked b {
+  color: var(--muted);
+}
+.skin-lock {
+  color: var(--gold) !important;
+}
+/* ещё не знаем размер комьюнити — не показываем ни замок, ни открытый скин */
+.skin-card.pending {
+  opacity: 0.5;
+}
+.safe-sprite.is-locked {
+  filter: none;
+  opacity: 0.9;
+}
+
+.skin-next {
+  font-family: var(--pixel);
+  font-size: 7px;
+  color: var(--neon-2) !important;
+  margin-top: 2px;
 }
 
 .tiers-h {

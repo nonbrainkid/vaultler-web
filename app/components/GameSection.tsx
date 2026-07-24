@@ -13,7 +13,11 @@ export default function GameSection() {
   // Ранг считает сервер (в /api/leaderboard). Держим его здесь и отдаём в игру —
   // от него зависит скин сейфа, так не нужен тяжёлый пересчёт на каждый опрос.
   const [rank, setRank] = useState<number | null>(null);
-  const handleRank = useCallback((r: number | null) => setRank(r), []);
+  const [players, setPlayers] = useState(0);
+  const handleRank = useCallback((r: number | null, p: number) => {
+    setRank(r);
+    setPlayers(p);
+  }, []);
 
   return (
     <>
@@ -24,7 +28,11 @@ export default function GameSection() {
             Server-authoritative: your stack, streak and timers live on our server, not in
             your browser. No, you cannot edit them in DevTools.
           </p>
-          <Vault rank={rank} onStackChanged={() => setLbKey((k) => k + 1)} />
+          <Vault
+            rank={rank}
+            players={players}
+            onStackChanged={() => setLbKey((k) => k + 1)}
+          />
         </div>
       </section>
 
