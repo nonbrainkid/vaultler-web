@@ -25,9 +25,11 @@ describe("экономика", () => {
     expect(multiplier(5, false)).toBeCloseTo(2.0);
   });
 
-  it("буст даёт ×1.5", () => {
-    expect(multiplier(1, true)).toBeCloseTo(1.2 * 1.5);
-    expect(ratePerSec(1, true)).toBeCloseTo(GAME.BASE_RATE_PER_SEC * 1.2 * 1.5);
+  it("буст за холд даёт ×5 (не-холдер ×1)", () => {
+    expect(GAME.BOOST_MULT).toBe(5);
+    expect(multiplier(1, true)).toBeCloseTo(1.2 * 5);
+    expect(multiplier(1, false)).toBeCloseTo(1.2); // без холда — только стрик
+    expect(ratePerSec(1, true)).toBeCloseTo(GAME.BASE_RATE_PER_SEC * 1.2 * 5);
   });
 
   it("тиры по порогам стека", () => {

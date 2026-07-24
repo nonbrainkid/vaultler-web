@@ -5,7 +5,7 @@ const TRUST = [
   },
   {
     h: "WE HOLD NOTHING",
-    d: "There is no deposit, no staking contract, no vault holding your money. A real custody vault needs a serious audit, and we are not going to babysit your funds in unaudited code. Rewards come from creator fees, not from other people's deposits.",
+    d: "There is no deposit, no staking contract, no vault holding your money. A real custody vault needs a serious audit, and we are not going to babysit your funds in unaudited code. The prize pool comes from trading fees and is paid out manually each week — not from other people's deposits.",
   },
   {
     h: "THE BOARD IS CHEAT-RESISTANT",

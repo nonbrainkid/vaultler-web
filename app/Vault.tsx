@@ -292,12 +292,12 @@ export default function Vault({
                 <rect
                   x="2"
                   y="14"
-                  width={Math.min(1, ((view?.multiplier ?? 1) - 1) / 3) * 196}
+                  width={Math.min(1, ((view?.multiplier ?? 1) - 1) / 14) * 196}
                   height="6"
                   fill="var(--neon)"
                 />
                 <rect
-                  x={2 + Math.min(1, ((view?.multiplier ?? 1) - 1) / 3) * 196 - 2}
+                  x={2 + Math.min(1, ((view?.multiplier ?? 1) - 1) / 14) * 196 - 2}
                   y="9"
                   width="5"
                   height="12"
@@ -328,7 +328,7 @@ export default function Vault({
               <>
                 <p className="boost-state">
                   <span className={"bpill" + (view?.boost ? " on" : "")}>
-                    {view?.boost ? "×1.5 ACTIVE" : "not holding $VLTR"}
+                    {view?.boost ? "×5 ACTIVE" : "not holding $VLTR"}
                   </span>
                 </p>
                 <p className="muted-note">
@@ -339,8 +339,9 @@ export default function Vault({
             ) : (
               <>
                 <p className="muted-note">
-                  Hold <b>$VLTR</b> to stack <b>×1.5</b> faster. Connect a wallet to link
-                  your account — one signature, no gas, no custody.
+                  Hold <b>$VLTR</b> to stack <b>×5</b> faster — that&apos;s how you reach the
+                  top 10 that splits the weekly pool. Connect a wallet to link your account:
+                  one signature, no gas, no custody.
                 </p>
                 <div className="boost-connect">
                   <ConnectButton wallet={wallet} onChanged={refetch} />
@@ -355,9 +356,9 @@ export default function Vault({
               <li>One cycle is 24h — crank once a day.</li>
               <li>Crank inside the window → streak +1, multiplier up.</li>
               <li>Miss it → raider skims your stack, streak resets.</li>
-              <li>Top of the weekly board splits the pot.</li>
+              <li>Top 10 of the weekly board split the fee pool.</li>
               <li>Climb the board to unlock better safe skins.</li>
-              <li>No wallet needed to play — connect only for the ×1.5.</li>
+              <li>Play free — hold $VLTR for the ×5 that gets you into the top 10.</li>
             </ul>
           </div>
         </aside>

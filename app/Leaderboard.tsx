@@ -79,9 +79,11 @@ export default function Leaderboard({
         <span className="amt">{lb ? fmt(lb.communalVault) : "—"} $STACK</span>
       </div>
       <div className="subline">
-        Everyone stacking feeds it. Weekly pool from <b>creator fees</b> · resets in{" "}
-        <b>{lb ? fmtWeek(lb.week.endsInMs) : "—"}</b> · <b>{lb?.players ?? 0}</b> stackers
+        The <b>top 10</b> split the weekly pool — half of the token&apos;s trading fees,
+        paid in real tokens. Resets in <b>{lb ? fmtWeek(lb.week.endsInMs) : "—"}</b> ·{" "}
+        <b>{lb?.players ?? 0}</b> stackers
       </div>
+      <div className="paidzone">▸ ranks 1–10 are in the money</div>
 
       {failed && (
         <p className="lb-err" role="alert">
@@ -103,7 +105,10 @@ export default function Leaderboard({
           </>
         ) : lb && lb.top.length > 0 ? (
           lb.top.map((r) => (
-            <div key={r.rank} className={"lbrow" + (r.isYou ? " you" : "")}>
+            <div
+              key={r.rank}
+              className={"lbrow" + (r.isYou ? " you" : "") + (r.rank <= 10 ? " paid" : "")}
+            >
               <span className="lbrank">{r.rank}</span>
               <span className="lblabel">
                 {r.label}
@@ -121,7 +126,7 @@ export default function Leaderboard({
         {lb?.you && !youInTop && (
           <div className="lbrow you outside">
             <span className="lbrank">{lb.you.rank}</span>
-            <span className="lblabel">you</span>
+            <span className="lblabel">you — {lb.you.rank - 10} off the top 10</span>
             <span className="lbstreak" />
             <span className="lbstack">{fmt(lb.you.stack)}</span>
           </div>

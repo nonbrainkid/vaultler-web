@@ -20,9 +20,9 @@ export default function SiteFooter() {
         <p className="disclaimer">
           $VLTR is a meme token with a game attached. Nothing here is financial advice or
           an offer to sell securities. <b>We do not custody user funds.</b> $STACK is an
-          in-game score with no monetary value. Rewards depend on creator fees from real
-          trading volume and are not guaranteed. Crypto is risky — only bring what you can
-          afford to lose.
+          in-game score with no monetary value. The weekly prize is a game reward for top
+          players, funded by trading fees, paid manually and not guaranteed. Crypto is
+          risky — only bring what you can afford to lose.
         </p>
 
         <p className="footer-meta">

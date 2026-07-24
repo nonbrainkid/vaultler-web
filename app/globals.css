@@ -980,10 +980,23 @@ body {
   font-size: 16px;
   color: var(--sand);
 }
+/* зона выплат: топ-10 «в деньгах» — золотой акцент слева */
+.paidzone {
+  margin-top: 10px;
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--gold);
+}
+.lbrow.paid {
+  border-left: 3px solid var(--gold-lo);
+}
 .lbrow.you {
   border-color: var(--neon-deep);
   background: #0d1a08;
   color: var(--neon-hi);
+}
+.lbrow.you.paid {
+  border-left-color: var(--gold);
 }
 .lbrow.outside {
   margin-top: 5px;

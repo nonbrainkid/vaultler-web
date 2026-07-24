@@ -40,8 +40,8 @@ export default function GameSection() {
         <div className="shell">
           <h2 className="section-title">WEEKLY BOARD</h2>
           <p className="section-lead">
-            Everyone stacking feeds the community vault. Top of the board splits the weekly
-            pot from creator fees.
+            Everyone stacking feeds the community vault. The <b>top 10</b> split the weekly
+            pool — half of the token&apos;s trading fees, paid in real tokens.
           </p>
           <Leaderboard refreshKey={lbKey} onRank={handleRank} />
         </div>

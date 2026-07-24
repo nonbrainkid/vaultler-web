@@ -1,7 +1,7 @@
 const QA = [
   {
     q: "Do I need to buy anything to play?",
-    a: "No. The game is free and works without a wallet. Holding $VLTR only multiplies your stacking rate by 1.5 — it is an advantage, not an entry ticket.",
+    a: "No. The game is free and works without a wallet. Holding $VLTR multiplies your stacking rate by 5 — a big edge, since the ×5 is realistically what gets you into the paid top 10. But anyone can play, earn $STACK and unlock skins.",
   },
   {
     q: "What can you do with my wallet once I connect?",
@@ -13,7 +13,11 @@ const QA = [
   },
   {
     q: "So where do real rewards come from?",
-    a: "Creator fees — 0.5% of trading volume on the token. Those fees fund the weekly pot that the top of the leaderboard splits. No fees, no pot: rewards scale with real activity and are never guaranteed.",
+    a: "Trading fees — 7% of volume on the token. Half of what we collect funds a weekly pool that the top 10 of the leaderboard split, paid manually each week in real tokens. No volume, no pool: rewards scale with real activity and are never guaranteed.",
+  },
+  {
+    q: "So holding pays me a cut of fees — is that a dividend?",
+    a: "No. The pool is a prize for the top 10 players on the weekly board, earned by playing — not a payout on your balance. Holding just makes you stack faster (×5). Two people with the same tokens can finish very differently depending on how they play. It is a game prize, not a share of profits.",
   },
   {
     q: "Is the code audited?",
