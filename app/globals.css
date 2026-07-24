@@ -411,6 +411,42 @@ body {
   font-size: 16px;
 }
 
+/* витрина скинов сейфа по рангам */
+.skins {
+  margin-bottom: 16px;
+}
+.skins-lead {
+  margin-bottom: 16px;
+}
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.skin-card {
+  background: #0d0904;
+  border: 2px solid var(--wood-darker);
+  padding: 12px 8px 10px;
+  text-align: center;
+}
+.skin-card .safe-sprite {
+  width: 72px;
+  margin: 0 auto 8px;
+}
+.skin-card figcaption {
+  display: grid;
+  gap: 3px;
+}
+.skin-card b {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--gold-hi);
+}
+.skin-card span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .tiers-h {
   font-family: var(--pixel);
   font-size: 9px;
@@ -617,10 +653,51 @@ body {
       drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
   }
 }
+/* элитные ранги (топ-10 и №1) светятся золотом — видно, что человек в топе */
+.safe-sprite.is-elite {
+  filter: drop-shadow(0 0 8px rgba(255, 217, 90, 0.55))
+    drop-shadow(0 0 16px rgba(255, 217, 90, 0.25))
+    drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
+}
+.safe-sprite.is-elite.is-spinning {
+  animation: eliteGlow 2.6s ease-in-out infinite;
+}
+@keyframes eliteGlow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 8px rgba(255, 217, 90, 0.55))
+      drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
+  }
+  50% {
+    filter: drop-shadow(0 0 18px rgba(255, 217, 90, 0.9))
+      drop-shadow(0 0 30px rgba(140, 255, 90, 0.35))
+      drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
+  }
+}
+
 /* зарейженный сейф — обесцвечен и отдаёт ржавчиной, свечение погасло */
-.safe-sprite.is-stalled {
+.safe-sprite.is-stalled,
+.safe-sprite.is-elite.is-stalled {
   filter: saturate(0.35) brightness(0.72)
     drop-shadow(0 0 7px rgba(176, 58, 36, 0.55));
+  animation: none;
+}
+
+/* подпись под спрайтом: какой скин открыт */
+.skin-tag {
+  margin-top: 8px;
+  text-align: center;
+  display: grid;
+  gap: 3px;
+}
+.skin-tag b {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--gold-hi);
+}
+.skin-tag span {
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .dial {
@@ -1241,6 +1318,9 @@ body {
   }
   .steps {
     grid-template-columns: repeat(4, 1fr);
+  }
+  .skin-grid {
+    grid-template-columns: repeat(6, 1fr);
   }
   .cards-3 {
     grid-template-columns: repeat(3, 1fr);

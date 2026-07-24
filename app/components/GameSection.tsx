@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Vault from "../Vault";
 import Leaderboard from "../Leaderboard";
 
@@ -10,6 +10,10 @@ import Leaderboard from "../Leaderboard";
  */
 export default function GameSection() {
   const [lbKey, setLbKey] = useState(0);
+  // Ранг считает сервер (в /api/leaderboard). Держим его здесь и отдаём в игру —
+  // от него зависит скин сейфа, так не нужен тяжёлый пересчёт на каждый опрос.
+  const [rank, setRank] = useState<number | null>(null);
+  const handleRank = useCallback((r: number | null) => setRank(r), []);
 
   return (
     <>
@@ -20,7 +24,7 @@ export default function GameSection() {
             Server-authoritative: your stack, streak and timers live on our server, not in
             your browser. No, you cannot edit them in DevTools.
           </p>
-          <Vault onStackChanged={() => setLbKey((k) => k + 1)} />
+          <Vault rank={rank} onStackChanged={() => setLbKey((k) => k + 1)} />
         </div>
       </section>
 
@@ -31,7 +35,7 @@ export default function GameSection() {
             Everyone stacking feeds the community vault. Top of the board splits the weekly
             pot from creator fees.
           </p>
-          <Leaderboard refreshKey={lbKey} />
+          <Leaderboard refreshKey={lbKey} onRank={handleRank} />
         </div>
       </section>
     </>

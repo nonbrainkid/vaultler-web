@@ -1,3 +1,5 @@
+import SafeSprite, { RANK_SKINS } from "./SafeSprite";
+
 const STEPS = [
   {
     n: "01",
@@ -42,8 +44,28 @@ export default function HowItWorks() {
           ))}
         </div>
 
+        <div className="card skins">
+          <h3 className="card-h neon">YOUR SAFE SHOWS YOUR RANK</h3>
+          <p className="skins-lead">
+            Everyone starts with a dented tin box. Climb the weekly board and the machine
+            upgrades itself — bronze, silver, gold cornice, a crown. No purchase unlocks
+            these. Only rank does.
+          </p>
+          <div className="skin-grid">
+            {RANK_SKINS.map((s, i) => (
+              <figure className="skin-card" key={s.label}>
+                <SafeSprite level={i} />
+                <figcaption>
+                  <b>{s.label}</b>
+                  <span>{s.hint}</span>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+
         <div className="tiers card">
-          <h3 className="tiers-h">YOUR MACHINE UPGRADES AS YOU STACK</h3>
+          <h3 className="tiers-h">STACK MILESTONES — YOUR PERSONAL PROGRESS</h3>
           <div className="tier-track">
             {TIERS.map((t, i) => (
               <div className="tier-chip" key={t}>

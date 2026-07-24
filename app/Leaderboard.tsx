@@ -30,7 +30,14 @@ function fmtWeek(ms: number): string {
   return `${h}h ${m}m`;
 }
 
-export default function Leaderboard({ refreshKey }: { refreshKey: number }) {
+export default function Leaderboard({
+  refreshKey,
+  onRank,
+}: {
+  refreshKey: number;
+  /** Сообщаем ранг наверх — от него зависит скин сейфа в игре. */
+  onRank?: (rank: number | null) => void;
+}) {
   const [lb, setLb] = useState<LeaderboardView | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -38,12 +45,14 @@ export default function Leaderboard({ refreshKey }: { refreshKey: number }) {
     try {
       const r = await fetch("/api/leaderboard", { cache: "no-store" });
       if (!r.ok) throw new Error("bad status");
-      setLb(await r.json());
+      const data: LeaderboardView = await r.json();
+      setLb(data);
       setFailed(false);
+      onRank?.(data.you?.rank ?? null);
     } catch {
       setFailed(true); // прошлые данные оставляем на экране
     }
-  }, []);
+  }, [onRank]);
 
   useEffect(() => {
     load();

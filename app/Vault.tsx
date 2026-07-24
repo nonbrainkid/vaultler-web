@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicView } from "@/lib/game";
 import ConnectButton from "./components/ConnectButton";
-import SafeSprite from "./components/SafeSprite";
+import SafeSprite, { RANK_SKINS, rankLevel } from "./components/SafeSprite";
 
 const COIN_CAP = [10, 22, 40, 64, 90];
 
@@ -31,7 +31,14 @@ function fmtLeft(ms: number): string {
   return `${h}h ${m % 60}m`;
 }
 
-export default function Vault({ onStackChanged }: { onStackChanged?: () => void }) {
+export default function Vault({
+  rank = null,
+  onStackChanged,
+}: {
+  /** Место в недельном борде — определяет скин сейфа. */
+  rank?: number | null;
+  onStackChanged?: () => void;
+}) {
   const [view, setView] = useState<PublicView | null>(null);
   const [wallet, setWallet] = useState<string | null>(null);
   const [recvAt, setRecvAt] = useState(0);
@@ -147,6 +154,7 @@ export default function Vault({ onStackChanged }: { onStackChanged?: () => void 
     return Math.max(4, Math.round(cap * prog));
   }, [view, d]);
 
+  const skinLevel = rankLevel(rank);
   const phase = view?.phase ?? "off";
   const machineClass =
     "machine" + (phase === "winding" ? " winding" : "") + (phase === "stall" ? " stalled" : "");
@@ -225,10 +233,14 @@ export default function Vault({ onStackChanged }: { onStackChanged?: () => void 
             <div className="machine-top">
               <div className="vault">
                 <SafeSprite
-                  tier={view?.tierIndex ?? 0}
+                  level={skinLevel}
                   spinning={phase === "winding"}
                   stalled={phase === "stall"}
                 />
+                <div className="skin-tag">
+                  <b>{RANK_SKINS[skinLevel].label}</b>
+                  <span>{RANK_SKINS[skinLevel].hint}</span>
+                </div>
               </div>
 
               <div className="chamber" ref={chamberRef}>
@@ -332,6 +344,7 @@ export default function Vault({ onStackChanged }: { onStackChanged?: () => void 
               <li>Crank inside the window → streak +1, multiplier up.</li>
               <li>Miss it → raider skims your stack, streak resets.</li>
               <li>Top of the weekly board splits the pot.</li>
+              <li>Climb the board to unlock better safe skins.</li>
               <li>No wallet needed to play — connect only for the ×1.5.</li>
             </ul>
           </div>
