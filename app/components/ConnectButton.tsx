@@ -9,7 +9,8 @@ import {
   useSwitchChain,
   useChainId,
 } from "wagmi";
-import { buildAuthMessage } from "@/lib/auth";
+import { createSiweMessage } from "viem/siwe";
+import { SIWE_STATEMENT, SIWE_TTL_MS } from "@/lib/auth";
 import { robinhoodChain } from "@/lib/chain";
 
 export function shortAddr(a: string): string {
@@ -64,19 +65,37 @@ export default function ConnectButton({
     setBusy(true);
     setErr(null);
     try {
-      const { nonce } = await (await fetch("/api/auth/nonce", { cache: "no-store" })).json();
-      const signature = await signMessageAsync({
-        message: buildAuthMessage(address, nonce),
+      const nres = await fetch("/api/auth/nonce", { cache: "no-store" });
+      if (!nres.ok) throw new Error("nonce");
+      const { nonce } = await nres.json();
+
+      // Полноценное SIWE-сообщение (EIP-4361): домен, chainId, срок действия.
+      // Кошелёк покажет пользователю домен — сервер примет подпись только для нашего.
+      const issuedAt = new Date();
+      const message = createSiweMessage({
+        domain: window.location.host,
+        address, // useAccount отдаёт checksum-адрес
+        statement: SIWE_STATEMENT,
+        uri: window.location.origin,
+        version: "1",
+        chainId: chainId || robinhoodChain.id,
+        nonce,
+        issuedAt,
+        expirationTime: new Date(issuedAt.getTime() + SIWE_TTL_MS),
       });
+
+      const signature = await signMessageAsync({ message });
       const r = await fetch("/api/auth/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ address, signature }),
+        body: JSON.stringify({ message, signature }),
       });
       if (!r.ok) throw new Error("verify");
       onChanged();
-    } catch {
-      setErr("sign-in failed");
+    } catch (e) {
+      // отказ подписи в кошельке — не ошибка, просто отмена
+      const msg = String((e as Error)?.message ?? "");
+      setErr(/reject|denied|User rejected/i.test(msg) ? null : "sign-in failed");
     } finally {
       setBusy(false);
     }

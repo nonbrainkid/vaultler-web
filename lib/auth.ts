@@ -1,22 +1,22 @@
-/** Общее для клиента и сервера: формат сообщения для подписи и имя nonce-cookie. */
+/** Общее для клиента и сервера: параметры входа кошельком (SIWE / EIP-4361). */
 
 export const NONCE_COOKIE = "vaultler_nonce";
 
+/** Текст, который кошелёк покажет пользователю при подписи. Явно про отсутствие рисков. */
+export const SIWE_STATEMENT =
+  "Sign in to The Vaultler. This proves you own this wallet — no transaction, no gas, no access to your funds.";
+
+/** Сколько действует подпись. Короткое окно: пойманная подпись быстро протухает. */
+export const SIWE_TTL_MS = 5 * 60 * 1000;
+
 /**
- * Сообщение, которое подписывает кошелёк для входа (SIWE-стиль).
- * Клиент и сервер ДОЛЖНЫ строить его одинаково, иначе подпись не сойдётся.
- * Подпись сообщения — это не транзакция: без газа, без движения средств.
+ * Ожидаемый домен для проверки SIWE-сообщения.
+ * В проде пиним через AUTH_DOMAIN (Host-заголовок можно подделать); локально берём Host.
+ * Домен в подписанном сообщении кошелёк показывает пользователю — если фишинг-сайт
+ * подсунет свой домен, наш сервер отвергнет подпись (домен не сойдётся).
  */
-export function buildAuthMessage(address: string, nonce: string): string {
-  return [
-    "The Vaultler — Sign in to stack.",
-    "",
-    "This only proves you own this wallet.",
-    "No transaction, no gas, no funds moved.",
-    "",
-    `Address: ${address}`,
-    `Nonce: ${nonce}`,
-  ].join("\n");
+export function expectedAuthDomain(hostHeader: string | null): string | undefined {
+  return process.env.AUTH_DOMAIN || hostHeader || undefined;
 }
 
 /** Идентичность игрока по адресу кошелька (нижний регистр = один аккаунт на кошелёк). */

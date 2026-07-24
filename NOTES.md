@@ -71,6 +71,18 @@
   Клиент буст НЕ задаёт (иначе накрутил бы холд). `DEV_FORCE_BOOST=1` — тест пути буста.
 - Проверено: SIWE end-to-end (valid→200 wallet-identity, битая подпись→401), буст→mult 1.5.
 
+### Безопасность входа кошельком (усилено 2026-07-24)
+- Вход переведён на полноценный **SIWE / EIP-4361** через `viem/siwe` (аудированные примитивы).
+- Сервер (`/api/auth/verify`) проверяет: **домен** (анти-фишинг/replay на чужом сайте),
+  **nonce** (одноразовый, из httpOnly-cookie), **срок действия** (5 мин), **подпись**.
+  `AUTH_DOMAIN` в проде пинит домен (Host можно подделать).
+- Rate-limit на `/api/auth/*` и `/api/crank` (`lib/ratelimit.ts`, скользящее окно по IP).
+- `node scripts/test-auth.mjs` (`npm run test:auth`) — 7 проверок: валидный вход +
+  отказы для чужого домена, чужого nonce, протухшей/битой/чужой подписи.
+- **Модель угроз:** мы НЕ шлём транзакций и НЕ просим approve — только читаем подпись
+  сообщения и публичный баланс. Через флоу нечего задрейнить. Приватники не трогаем.
+- TODO (бэклог): ERC-1271 (смарт-кошельки) — нужен рабочий RPC; строгий CSP c nonce.
+
 ### Env для M2 (в проде выставить реальные)
 - `NEXT_PUBLIC_RH_CHAIN_ID`, `NEXT_PUBLIC_RH_RPC_URL`, `NEXT_PUBLIC_RH_NAME`, `NEXT_PUBLIC_RH_EXPLORER`
 - `NEXT_PUBLIC_VLTR_ADDRESS`, `NEXT_PUBLIC_VLTR_DECIMALS`, `NEXT_PUBLIC_VLTR_BOOST_MIN`
