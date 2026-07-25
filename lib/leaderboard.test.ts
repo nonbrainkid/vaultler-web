@@ -9,13 +9,86 @@ function off(stack: number): PlayerState {
   return { ...initialState(NOW), stack };
 }
 
-describe("weekInfo", () => {
+/**
+ * Граница недели — суббота 00:00 по Нью-Йорку. Проверяем не «примерно раз в 7 суток»,
+ * а что момент сброса действительно приходится на субботнюю полночь В ЗОНЕ, включая
+ * недели с переходом на летнее время: игроки видят обратный отсчёт до раздачи призов,
+ * и сдвиг на час — это чей-то не сделанный вовремя кранк.
+ */
+describe("weekInfo — граница недели", () => {
+  const DAY = 24 * 3600 * 1000;
+  /**
+   * Как выглядит момент в Нью-Йорке — «Sat 00:00».
+   * Собираем из частей, а не сравниваем отформатированную строку: разные версии ICU
+   * ставят запятую после дня недели по-разному, и тест падал бы на форматировании,
+   * а не на логике.
+   */
+  const inNY = (ts: number) => {
+    const p: Record<string, string> = {};
+    for (const part of new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date(ts))) {
+      p[part.type] = part.value;
+    }
+    return `${p.weekday} ${p.hour}:${p.minute}`;
+  };
+
   it("endsInMs в пределах недели и убывает со временем", () => {
     const a = weekInfo(NOW);
     expect(a.endsInMs).toBeGreaterThan(0);
-    expect(a.endsInMs).toBeLessThanOrEqual(7 * 24 * 3600 * 1000);
+    expect(a.endsInMs).toBeLessThanOrEqual(7 * DAY);
     const b = weekInfo(NOW + 3600_000);
     expect(b.endsInMs).toBeLessThan(a.endsInMs);
+  });
+
+  it("сброс всегда попадает на субботу 00:00 по Нью-Йорку", () => {
+    // Проходим год с шагом в трое суток — попадаем и в летнее, и в зимнее время.
+    for (let i = 0; i < 122; i++) {
+      const ts = Date.UTC(2026, 0, 1) + i * 3 * DAY;
+      expect(inNY(weekInfo(ts).endsAt)).toBe("Sat 00:00");
+    }
+  });
+
+  /**
+   * Регрессия на старую реализацию: якорь в UTC + остаток от деления на 7 суток.
+   * В неделю перехода на летнее время такая сетка даёт 23:00 пятницы или 01:00 субботы.
+   */
+  it("переход на летнее время не сдвигает сброс (март 2026)", () => {
+    // Часы переводят вперёд в воскресенье 8 марта 2026, 02:00 → «кривая» неделя это
+    // суббота 7 марта … суббота 14 марта, в ней 167 часов.
+    const insideDstWeek = Date.UTC(2026, 2, 10, 12); // вторник внутри этой недели
+    expect(inNY(weekInfo(insideDstWeek).endsAt)).toBe("Sat 00:00");
+    const week = weekInfo(insideDstWeek).endsAt - weekInfo(insideDstWeek - 7 * DAY).endsAt;
+    expect(week).toBe(7 * DAY - 3600_000);
+  });
+
+  it("переход на зимнее время не сдвигает сброс (ноябрь 2026)", () => {
+    // Часы переводят назад в воскресенье 1 ноября 2026 → неделя суббота 31 октября …
+    // суббота 7 ноября длиннее обычной на час (169 часов).
+    const insideDstWeek = Date.UTC(2026, 10, 3, 12); // вторник внутри этой недели
+    expect(inNY(weekInfo(insideDstWeek).endsAt)).toBe("Sat 00:00");
+    const week = weekInfo(insideDstWeek).endsAt - weekInfo(insideDstWeek - 7 * DAY).endsAt;
+    expect(week).toBe(7 * DAY + 3600_000);
+  });
+
+  it("номер недели растёт ровно на 1 через границу", () => {
+    const ts = Date.UTC(2026, 6, 25, 12);
+    const w = weekInfo(ts);
+    const next = weekInfo(w.endsAt + 60_000);
+    expect(next.weekId).toBe(w.weekId + 1);
+    // и не меняется в пределах одной недели
+    expect(weekInfo(ts + 3 * DAY).weekId).toBe(w.weekId);
+  });
+
+  it("в субботу сразу после полуночи неделя уже новая, а не заканчивается", () => {
+    const justAfterReset = weekInfo(Date.UTC(2026, 6, 25, 12)).endsAt + 1000;
+    const w = weekInfo(justAfterReset);
+    // до следующего сброса почти полные 7 суток
+    expect(w.endsInMs).toBeGreaterThan(6.9 * DAY);
   });
 });
 

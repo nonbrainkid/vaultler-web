@@ -87,8 +87,8 @@ export default function Leaderboard({
       </div>
       <div className="subline">
         The <b>top 10</b> split the weekly pool — half of the token&apos;s trading fees,
-        paid in real tokens. Resets in <b>{lb ? fmtWeek(lb.week.endsInMs) : "—"}</b> ·{" "}
-        <b>{lb?.players ?? 0}</b> stackers
+        paid in real tokens. Resets <b>Saturday 00:00 New York</b>, in{" "}
+        <b>{lb ? fmtWeek(lb.week.endsInMs) : "—"}</b> · <b>{lb?.players ?? 0}</b> stackers
       </div>
       <div className="paidzone">▸ ranks 1–10 are in the money</div>
 
