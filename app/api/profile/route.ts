@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  if (!allowProfile(clientKey(req), Date.now())) {
+  if (!(await allowProfile(clientKey(req), Date.now()))) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 

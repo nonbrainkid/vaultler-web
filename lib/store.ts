@@ -33,6 +33,24 @@ export interface MutateOutcome<R> {
   result: R;
 }
 
+/**
+ * Запись журнала кранков. Пишется в ТОЙ ЖЕ транзакции, что и сам стейт: иначе при
+ * падении между двумя записями журнал разошёлся бы с тем, что он описывает, и потерял
+ * бы смысл как доказательство при разборе спора.
+ */
+export interface CrankAudit {
+  /** Серверный epoch ms попытки. */
+  at: number;
+  ok: boolean;
+  /** Фаза на момент попытки (до завода). */
+  phase: string;
+  /** Стрик и стек ПОСЛЕ кранка — точка отсчёта при разборе. */
+  streak: number;
+  stack: number;
+  /** Сколько скимнул рейдер в этом же settle; null — рейда не было. */
+  lostToRaid: number | null;
+}
+
 export interface Store {
   /**
    * Прочитать сохранённый стейт (или initialState для нового игрока) БЕЗ записи.
@@ -44,11 +62,15 @@ export interface Store {
   /**
    * Атомарно: загрузить-или-создать стейт игрока, применить `fn`, сохранить.
    * `fn` — чистая функция из lib/game (settle/crank). Возвращает новый стейт и произвольный результат.
+   *
+   * `audit` (опц.) вызывается уже с результатом `fn` и возвращает запись журнала либо
+   * null, если писать нечего. Строка журнала сохраняется в той же транзакции.
    */
   mutate<R>(
     identity: string,
     now: number,
     fn: (state: PlayerState) => MutateOutcome<R>,
+    audit?: (outcome: MutateOutcome<R>) => CrankAudit | null,
   ): Promise<MutateOutcome<R>>;
 
   /**
@@ -72,19 +94,26 @@ let _store: Store | null = null;
 
 export async function getStore(): Promise<Store> {
   if (_store) return _store;
+
   if (process.env.DATABASE_URL) {
     const { PrismaStore } = await import("./store-prisma");
     _store = new PrismaStore();
-  } else {
-    // Файловый стор — только для локальной разработки. На проде без DATABASE_URL
-    // файловая ФС эфемерна (Vercel) и стейт бы терялся → падаем с внятной ошибкой.
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "DATABASE_URL не задан в production. Подключите Vercel Postgres (см. NOTES.md).",
-      );
-    }
+    return _store;
+  }
+
+  // Файловый стор — только для локальной разработки. Условие статически вычислимо
+  // (бандлер подставляет NODE_ENV), поэтому в прод-сборке ветка вырезается вместе с
+  // import("./store-file") — fs/path не попадают в serverless-бандл, а заодно уходит
+  // build-варнинг Turbopack «whole project traced».
+  if (process.env.NODE_ENV !== "production") {
     const { FileStore } = await import("./store-file");
     _store = new FileStore();
+    return _store;
   }
-  return _store;
+
+  // Прод без DATABASE_URL: файловая ФС на Vercel эфемерна, стейт терялся бы молча
+  // между деплоями и инстансами. Лучше упасть громко.
+  throw new Error(
+    "DATABASE_URL не задан в production. Подключите Vercel Postgres (docs/deployment.md).",
+  );
 }

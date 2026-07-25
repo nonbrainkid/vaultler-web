@@ -4,7 +4,8 @@
  * Чистые функции: НЕ читают время из окружения, НЕ трогают БД.
  * Вызывающий код передаёт `now` (серверный Date.now()) и текущий стейт игрока.
  * Это делает логику детерминированной и юнит-тестируемой, а главное — гарантирует,
- * что клиент не может подсунуть своё время или стейт (см. NOTES.md → «сервер главный»).
+ * что клиент не может подсунуть своё время или стейт (docs/architecture.md → «сервер —
+ * источник правды», docs/game-mechanics.md — формулы и фазы).
  */
 
 // ---- Конфиг таймингов и экономики ----
@@ -145,6 +146,13 @@ export interface CrankResult {
   ok: boolean;
   /** Причина отказа, если ok=false. */
   reason?: "winding";
+  /**
+   * Фаза, в которой застали машину на момент попытки — после settle, до завода.
+   * Нужна для аудита (`CrankLog`): по ней видно, что именно сервер видел.
+   * Внимание: если settle только что применил рейд, он гасит машину, и фаза здесь
+   * будет "off", а не "stall" — сам факт простоя виден по `raid`.
+   */
+  phaseAt: Phase;
   state: PlayerState;
   /** Событие рейда, если settle перед кранком обнаружил простой. */
   raid: RaidEvent | null;
@@ -161,7 +169,7 @@ export function crank(prev: PlayerState, now: number): CrankResult {
   const p = phase(state, now);
 
   if (p === "winding") {
-    return { ok: false, reason: "winding", state, raid: settled.raid };
+    return { ok: false, reason: "winding", phaseAt: p, state, raid: settled.raid };
   }
 
   if (p === "ready") {
@@ -176,7 +184,7 @@ export function crank(prev: PlayerState, now: number): CrankResult {
   state.lastCrankAt = now;
   state.lastSettleAt = now;
 
-  return { ok: true, state, raid: settled.raid };
+  return { ok: true, phaseAt: p, state, raid: settled.raid };
 }
 
 /** Свежий стейт для нового игрока. */

@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  if (!allowNonce(clientKey(req), Date.now())) {
+  if (!(await allowNonce(clientKey(req), Date.now()))) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 

@@ -4,6 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
+import { rateLimitBackend } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,9 @@ export async function GET() {
 
   checks.sessionSecret = process.env.SESSION_SECRET ? "set" : "default";
   checks.chain = process.env.NEXT_PUBLIC_RH_RPC_URL ? "configured" : "placeholder";
+  // "memory" — лимиты считаются каждым инстансом отдельно и обходятся размазыванием
+  // запросов. Перед раздачей реальных призов здесь должно быть "shared".
+  checks.rateLimit = rateLimitBackend();
 
   return NextResponse.json({ ok, checks, ts: Date.now() }, { status: ok ? 200 : 503 });
 }

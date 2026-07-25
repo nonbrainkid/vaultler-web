@@ -7,6 +7,7 @@ import { PrismaClient } from "./generated/prisma";
 import { initialState, type PlayerState } from "./game";
 import { nicknameKey } from "./profile";
 import type {
+  CrankAudit,
   MutateOutcome,
   PlayerSnapshot,
   ProfilePatch,
@@ -67,6 +68,7 @@ export class PrismaStore implements Store {
     identity: string,
     now: number,
     fn: (state: PlayerState) => MutateOutcome<R>,
+    audit?: (outcome: MutateOutcome<R>) => CrankAudit | null,
   ): Promise<MutateOutcome<R>> {
     return prisma.$transaction(async (tx) => {
       // Лочим строку игрока на время транзакции (если существует).
@@ -75,11 +77,29 @@ export class PrismaStore implements Store {
       const state = row ? toState(row) : initialState(now);
       const outcome = fn(state);
       const data = toWrite(outcome.state);
-      await tx.player.upsert({
+      // upsert возвращает строку — из неё берём playerId для журнала (у нового игрока
+      // id появляется только здесь).
+      const player = await tx.player.upsert({
         where: { identity },
         create: { identity, ...data },
         update: data,
+        select: { id: true },
       });
+
+      const entry = audit?.(outcome) ?? null;
+      if (entry) {
+        await tx.crankLog.create({
+          data: {
+            playerId: player.id,
+            at: BigInt(Math.trunc(entry.at)),
+            ok: entry.ok,
+            phase: entry.phase,
+            streak: entry.streak,
+            stack: entry.stack,
+            lostToRaid: entry.lostToRaid,
+          },
+        });
+      }
       return outcome;
     });
   }

@@ -92,6 +92,30 @@ describe("кранк", () => {
   });
 });
 
+// phaseAt уходит в журнал CrankLog — по нему потом разбирают спорные ситуации.
+describe("фаза на момент попытки (для аудита)", () => {
+  it("первый кранк застаёт машину выключенной", () => {
+    expect(crank(fresh(), T0).phaseAt).toBe("off");
+  });
+
+  it("отклонённый кранк фиксирует winding", () => {
+    const s = crank(fresh(), T0).state;
+    expect(crank(s, T0 + HOUR).phaseAt).toBe("winding");
+  });
+
+  it("перекранк в окне фиксирует ready", () => {
+    const s = crank(fresh(), T0).state;
+    expect(crank(s, T0 + GAME.WIND_MS + HOUR).phaseAt).toBe("ready");
+  });
+
+  it("после простоя — off, потому что рейд уже погасил машину; простой виден по raid", () => {
+    const s = crank(fresh(), T0).state;
+    const r = crank(s, T0 + GAME.WIND_MS + GAME.GRACE_MS + HOUR);
+    expect(r.phaseAt).toBe("off");
+    expect(r.raid).not.toBeNull();
+  });
+});
+
 describe("начисление стека (settle)", () => {
   it("стек капает по ставке за секунды внутри окна завода", () => {
     const s = crank(fresh(), T0).state; // streak 1

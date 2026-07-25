@@ -35,16 +35,24 @@ model Player {
   @@index([stack])
 }
 
-// Аудит кранков — для анти-чита и разбора спорных ситуаций (M4).
+// Аудит кранков — для анти-чита и разбора спорных ситуаций («у меня было больше стека»).
+// Пишется в той же транзакции, что и стейт игрока (lib/store-prisma.ts), иначе журнал
+// мог бы разойтись с тем, что он описывает.
+//
+// Записываются только УСПЕШНЫЕ кранки. Отклонённые (фаза winding) не логируем осознанно:
+// они ничего не меняют в стейте — спорить не о чем, — а клиент, поллящий кранк, при
+// лимите 1/сек нагенерил бы до 86400 строк в сутки на игрока.
 model CrankLog {
-  id        String   @id @default(cuid())
-  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  playerId  String
-  at        BigInt // серверный epoch ms кранка
-  ok        Boolean // прошёл ли кранк валидацию фазы
-  phase     String // фаза на момент попытки
-  streak    Int // стрик после кранка
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  playerId   String
+  at         BigInt // серверный epoch ms кранка
+  ok         Boolean // прошёл ли кранк валидацию фазы
+  phase      String // фаза на момент попытки (до завода)
+  streak     Int // стрик после кранка
+  stack      Float // стек после кранка — точка отсчёта при разборе спора
+  lostToRaid Float? // сколько скимнул рейдер в этом же settle; null — рейда не было
+  createdAt  DateTime @default(now())
 
   @@index([playerId, at])
 }

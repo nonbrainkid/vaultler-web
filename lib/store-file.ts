@@ -7,6 +7,7 @@ import path from "node:path";
 import { initialState, type PlayerState } from "./game";
 import { nicknameKey } from "./profile";
 import type {
+  CrankAudit,
   MutateOutcome,
   PlayerSnapshot,
   ProfilePatch,
@@ -67,6 +68,9 @@ export class FileStore implements Store {
     identity: string,
     now: number,
     fn: (state: PlayerState) => MutateOutcome<R>,
+    // Журнал кранков намеренно не ведём: файловый стор — только для локальной разработки,
+    // а журнал нужен для разбора споров о реальных призах, которых в dev не бывает.
+    _audit?: (outcome: MutateOutcome<R>) => CrankAudit | null,
   ): Promise<MutateOutcome<R>> {
     await this.ensureLoaded();
     return this.withLock(identity, async () => {

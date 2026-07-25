@@ -30,7 +30,7 @@ export const dynamic = "force-dynamic";
 const MAX_MESSAGE_LEN = 2000;
 
 export async function POST(req: NextRequest) {
-  if (!allowAuth(clientKey(req), Date.now())) {
+  if (!(await allowAuth(clientKey(req), Date.now()))) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
