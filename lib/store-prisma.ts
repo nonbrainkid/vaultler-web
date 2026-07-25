@@ -4,7 +4,7 @@
  * одновременных кранка не начислили стек дважды.
  */
 import { PrismaClient } from "./generated/prisma";
-import { initialState, type PlayerState } from "./game";
+import { clampHolderLevel, initialState, type PlayerState } from "./game";
 import { nicknameKey } from "./profile";
 import type {
   CrankAudit,
@@ -26,7 +26,8 @@ type Row = {
   lastCrankAt: bigint | null;
   lastSettleAt: bigint;
   machineOn: boolean;
-  boost: boolean;
+  boostTier: number;
+  boostPpb: number;
   nickname: string | null;
   hideWallet: boolean;
 };
@@ -38,7 +39,10 @@ function toState(row: Row): PlayerState {
     lastCrankAt: row.lastCrankAt === null ? null : Number(row.lastCrankAt),
     lastSettleAt: Number(row.lastSettleAt),
     machineOn: row.machineOn,
-    boost: row.boost,
+    // clamp, а не доверие колонке: значение вне лестницы тиров означало бы неизвестный
+    // множитель, и трактовать его надо как «буста нет», а не как максимальный.
+    boostTier: clampHolderLevel(row.boostTier),
+    boostPpb: Math.max(0, Number(row.boostPpb) || 0),
     nickname: row.nickname ?? null,
     hideWallet: row.hideWallet ?? false,
   };
@@ -51,7 +55,9 @@ function toWrite(s: PlayerState) {
     lastCrankAt: s.lastCrankAt === null ? null : BigInt(Math.trunc(s.lastCrankAt)),
     lastSettleAt: BigInt(Math.trunc(s.lastSettleAt)),
     machineOn: s.machineOn,
-    boost: s.boost,
+    boostTier: s.boostTier,
+    // ppb — целое (Int в схеме): доля ≤ 1e9, дробные доли ppb на пороги не влияют.
+    boostPpb: Math.round(s.boostPpb),
     nickname: s.nickname,
     nicknameKey: s.nickname ? nicknameKey(s.nickname) : null,
     hideWallet: s.hideWallet,

@@ -9,7 +9,8 @@
  *   node scripts/seed-bots.mjs 239     # засеять 239 ботов
  *   node scripts/seed-bots.mjs --clear # убрать всех ботов
  *
- * После запуска dev-сервер нужно перезапустить: файловый стор кэширует данные в памяти.
+ * Перезапускать dev-сервер не нужно: файловый стор сверяет отпечаток файла и перечитывает
+ * его, когда файл изменился со стороны.
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -57,6 +58,21 @@ function randomStack() {
   return 40 + Math.round(Math.pow(Math.random(), 2.6) * 46000);
 }
 
+/**
+ * Ступень холдерского буста (0..5, см. HOLDER_TIERS в lib/game.ts). Распределение
+ * намеренно перекошено к нулю: верхние ступени требуют долей в эмиссии, которых у
+ * большинства не бывает, и борд не должен выглядеть так, будто ×5 есть у всех.
+ */
+function randomBoostTier() {
+  const r = Math.random();
+  if (r < 0.62) return 0;
+  if (r < 0.82) return 1;
+  if (r < 0.92) return 2;
+  if (r < 0.97) return 3;
+  if (r < 0.995) return 4;
+  return 5;
+}
+
 async function readStore() {
   try {
     return JSON.parse(await fs.readFile(FILE, "utf8"));
@@ -83,7 +99,7 @@ const realPlayers = Object.keys(data).length;
 if (clear) {
   await writeStore(data);
   console.log(`Убрано ботов: ${before - realPlayers}. Осталось игроков: ${realPlayers}.`);
-  console.log("Перезапусти dev-сервер, чтобы стор перечитал файл.");
+  console.log("Перезапуск dev-сервера не нужен: стор сам замечает, что файл изменился.");
   process.exit(0);
 }
 
@@ -97,7 +113,9 @@ for (const name of makeNames(count)) {
     // Машины выключены намеренно: иначе settle на каждом чтении борда крутил бы
     // им начисления и рейды, и цифры плыли бы при каждом запросе.
     machineOn: false,
-    boost: Math.random() < 0.3,
+    // Ступень холдерского буста: у большинства её нет, вершина — редкость (как в жизни).
+    boostTier: randomBoostTier(),
+    boostPpb: 0,
   };
 }
 
@@ -110,4 +128,4 @@ const stacks = Object.entries(data)
 
 console.log(`Засеяно ботов: ${count}. Всего игроков: ${Object.keys(data).length}.`);
 console.log(`Стек ботов: max ${stacks[0]}, медиана ${stacks[Math.floor(stacks.length / 2)]}, min ${stacks.at(-1)}.`);
-console.log("Перезапусти dev-сервер, чтобы стор перечитал файл.");
+console.log("Перезапуск dev-сервера не нужен: стор сам замечает, что файл изменился.");

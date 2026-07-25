@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { parseUnits } from "viem";
-import { meetsBoostThreshold } from "./vltr";
+import { meetsBoostThreshold, rawForPpb, shareInPpb } from "./vltr";
+import { HOLDER_TIERS, holderTierFromPpb, MAX_HOLDER_LEVEL } from "./game";
 
-// Порог решает, получит игрок ×5 или нет, поэтому проверяем именно границу.
+// Анти-дуст-порог: страхует вырожденную конфигурацию токена. Проверяем именно границу.
 describe("порог буста", () => {
   it("ровно порог — буст есть (граница включительно)", () => {
     expect(meetsBoostThreshold(parseUnits("1", 18), 18, "1")).toBe(true);
@@ -41,5 +42,62 @@ describe("порог буста", () => {
 
   it("огромный баланс не ломает сравнение", () => {
     expect(meetsBoostThreshold(parseUnits("1000000000000", 18), 18, "1")).toBe(true);
+  });
+});
+
+/**
+ * Доля в эмиссии — знаменатель всей лестницы тиров. Считается целиком в bigint:
+ * Number терял бы точность на балансах крупных холдеров, а от этой величины зависит
+ * множитель, определяющий, кто попадёт в топ-10 и разделит призовой пул.
+ */
+describe("доля в эмиссии (ppb)", () => {
+  const SUPPLY = parseUnits("1000000000", 18); // 1 млрд токенов, 18 decimals
+
+  it("считает долю независимо от decimals — они сокращаются", () => {
+    expect(shareInPpb(SUPPLY, SUPPLY)).toBe(1e9); // 100%
+    expect(shareInPpb(SUPPLY / 2n, SUPPLY)).toBe(5e8); // 50%
+    expect(shareInPpb(SUPPLY / 1000n, SUPPLY)).toBe(1e6); // 0.1%
+    expect(shareInPpb(parseUnits("1000000", 6), parseUnits("1000000000", 6))).toBe(1e6);
+  });
+
+  it("нулевой баланс и нулевая эмиссия не роняют счёт", () => {
+    expect(shareInPpb(0n, SUPPLY)).toBe(0);
+    expect(shareInPpb(parseUnits("1", 18), 0n)).toBe(0);
+    expect(shareInPpb(0n, 0n)).toBe(0);
+  });
+
+  it("не теряет точность на балансе кита", () => {
+    // 0.5% эмиссии — ровно вершина лестницы; на один вэй меньше уже нет.
+    const exact = rawForPpb(HOLDER_TIERS[MAX_HOLDER_LEVEL].minPpb, SUPPLY);
+    expect(holderTierFromPpb(shareInPpb(exact, SUPPLY))).toBe(MAX_HOLDER_LEVEL);
+    expect(holderTierFromPpb(shareInPpb(exact - 1n, SUPPLY))).toBe(MAX_HOLDER_LEVEL - 1);
+  });
+
+  it("порог каждой ступени переводится в токены и обратно без сдвига границы", () => {
+    for (const t of HOLDER_TIERS.slice(1)) {
+      const need = rawForPpb(t.minPpb, SUPPLY);
+      expect(holderTierFromPpb(shareInPpb(need, SUPPLY))).toBe(t.level);
+      expect(holderTierFromPpb(shareInPpb(need - 1n, SUPPLY))).toBe(t.level - 1);
+    }
+  });
+
+  it("сколько токенов нужно на ступень — считается от эмиссии", () => {
+    // 0.001% от 1 млрд = 10 000 токенов.
+    expect(rawForPpb(10_000, SUPPLY)).toBe(parseUnits("10000", 18));
+    // 0.5% от 1 млрд = 5 млн токенов.
+    expect(rawForPpb(5_000_000, SUPPLY)).toBe(parseUnits("5000000", 18));
+    expect(rawForPpb(0, SUPPLY)).toBe(0n);
+    expect(rawForPpb(10_000, 0n)).toBe(0n);
+  });
+
+  /**
+   * Лестница самокалибруется: та же ступень при вдвое большей эмиссии требует вдвое
+   * больше токенов. Именно поэтому порог задан долей, а не числом токенов — иначе его
+   * пришлось бы вручную догонять после каждого изменения эмиссии.
+   */
+  it("вдвое большая эмиссия — вдвое дороже ступень", () => {
+    const one = rawForPpb(HOLDER_TIERS[2].minPpb, SUPPLY);
+    const twice = rawForPpb(HOLDER_TIERS[2].minPpb, SUPPLY * 2n);
+    expect(twice).toBe(one * 2n);
   });
 });

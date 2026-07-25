@@ -4,7 +4,7 @@
  */
 import { NextRequest } from "next/server";
 import { addressFromIdentity } from "@/lib/auth";
-import { computeBoost } from "@/lib/vltr";
+import { readHolderStatus } from "@/lib/vltr";
 import { getStore } from "@/lib/store";
 import { settle, toPublicView } from "@/lib/game";
 import { jsonNoStore, resolveIdentity, sameOriginOk } from "@/lib/http";
@@ -39,21 +39,28 @@ export async function POST(req: NextRequest) {
     return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
 
-  // null — RPC не ответил. Прежний буст СОХРАНЯЕМ: снимать ×5 у холдера из-за сетевого
-  // сбоя нельзя (а выдавать незаслуженно — тем более).
-  const fresh = await computeBoost(address);
+  // null — RPC не ответил. Прежний тир СОХРАНЯЕМ: снимать множитель у холдера из-за
+  // сетевого сбоя нельзя (а выдавать незаслуженно — тем более).
+  const status = await readHolderStatus(address, now);
   const store = await getStore();
   const { state } = await store.mutate(identity, now, (s) => {
     const r = settle(s, now);
-    if (fresh !== null) r.state.boost = fresh;
+    if (status !== null) {
+      r.state.boostTier = status.read.tier;
+      r.state.boostPpb = status.read.ppb;
+    }
     return { state: r.state, result: r };
   });
 
   return jsonNoStore({
-    boost: state.boost,
+    boost: state.boostTier > 0,
     // Честно сообщаем клиенту, что значение не подтверждено: UI не должен показывать
     // «не холдит», когда мы просто не смогли посмотреть.
-    stale: fresh === null,
+    stale: status === null,
+    // Свой баланс и сколько докупить до следующей ступени — это и есть причина держать
+    // больше минимума. Отдаём ТОЛЬКО свои данные: чужие балансы наружу не уходят.
+    holderBalance: status?.balance ?? null,
+    toNextTier: status?.toNext ?? null,
     view: toPublicView(state, now),
   });
 }

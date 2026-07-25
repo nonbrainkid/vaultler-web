@@ -1,13 +1,18 @@
 /**
- * E2E-проверка холдерского буста ×5 против НАСТОЯЩЕГО чейна.
+ * E2E-проверка холдерского буста против НАСТОЯЩЕГО чейна.
  *
  * Зачем отдельный скрипт: буст — единственное место, где игровая экономика зависит от
- * внешнего состояния (баланс токена on-chain). Юнит-тесты покрывают порог и порядок
- * применения, но не отвечают на вопрос «сервер вообще умеет читать баланс и реагировать
- * на его изменение». Здесь проверяется именно это.
+ * внешнего состояния (баланс и эмиссия токена on-chain). Юнит-тесты покрывают пороги и
+ * порядок применения, но не отвечают на вопрос «сервер вообще умеет читать чейн и
+ * реагировать на изменения». Здесь проверяется именно это.
  *
  * Главный кейс — регрессия на эксплойт: раньше буст писался только при логине, поэтому
  * можно было войти с токеном, тут же продать его и стакать ×5 бесконечно.
+ *
+ * Второй важный кейс — лестница тиров: множитель зависит от ДОЛИ в эмиссии, а не от
+ * абсолютного числа токенов. Пока игрок один на весь mock-токен, он владеет ~100%
+ * эмиссии и попадает на вершину при любом балансе — поэтому в конце скрипт доминирует
+ * эмиссию админским минтом и проверяет ступени на настоящих долях.
  *
  * Требует:
  *   1) anvil на RPC_URL с задеплоенным mock-ERC20 (mint/burn открыты);
@@ -20,6 +25,9 @@ import { createWalletClient, createPublicClient, http, parseUnits } from "viem";
 // Настоящая константа, а не копия: иначе тест подписывает сообщение, которого
 // приложение не отправляет (так и пропустили несовместимый statement).
 import { SIWE_STATEMENT } from "../lib/auth.ts";
+// Лестница берётся из самого приложения: тест должен проверять реальные пороги,
+// а не их копию, которая разойдётся при первой же калибровке экономики.
+import { GAME, HOLDER_TIERS, MAX_HOLDER_LEVEL } from "../lib/game.ts";
 
 const BASE = process.env.BASE ?? "http://localhost:3100";
 const RPC_URL = process.env.RPC_URL ?? "http://127.0.0.1:8545";
@@ -54,21 +62,41 @@ const MOCK_ABI = [
   { type: "function", name: "mint", inputs: [{ type: "address" }, { type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
   { type: "function", name: "burn", inputs: [{ type: "address" }, { type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
   { type: "function", name: "balanceOf", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }], stateMutability: "view" },
+  { type: "function", name: "totalSupply", inputs: [], outputs: [{ type: "uint256" }], stateMutability: "view" },
 ];
 
 const admin = mnemonicToAccount(ANVIL_MNEMONIC);
 const wallet = createWalletClient({ account: admin, chain, transport: http(RPC_URL) });
 const pub = createPublicClient({ chain, transport: http(RPC_URL) });
 
-async function setBalance(to, tokens) {
-  const current = await pub.readContract({ address: TOKEN, abi: MOCK_ABI, functionName: "balanceOf", args: [to] });
-  const target = parseUnits(String(tokens), 18);
+const balanceOf = (who) =>
+  pub.readContract({ address: TOKEN, abi: MOCK_ABI, functionName: "balanceOf", args: [who] });
+const totalSupply = () =>
+  pub.readContract({ address: TOKEN, abi: MOCK_ABI, functionName: "totalSupply" });
+
+/** Выставить баланс в сырых единицах (без float по дороге: доли считаются в bigint). */
+async function setBalanceRaw(to, target) {
+  const current = await balanceOf(to);
   if (target === current) return;
   const hash =
     target > current
       ? await wallet.writeContract({ address: TOKEN, abi: MOCK_ABI, functionName: "mint", args: [to, target - current] })
       : await wallet.writeContract({ address: TOKEN, abi: MOCK_ABI, functionName: "burn", args: [to, current - target] });
   await pub.waitForTransactionReceipt({ hash });
+}
+
+async function setBalance(to, tokens) {
+  await setBalanceRaw(to, parseUnits(String(tokens), 18));
+}
+
+/**
+ * Баланс, дающий ровно долю `ppb` при текущей эмиссии «остальных».
+ * b/(O+b) = p/1e9  →  b = p·O/(1e9−p). Считается в bigint: на 18 decimals Number
+ * потерял бы точность как раз там, где проходит граница ступени.
+ */
+function rawForShare(ppb, othersRaw) {
+  const p = BigInt(Math.round(ppb));
+  return (p * othersRaw) / (1_000_000_000n - p);
 }
 
 // ── HTTP-сессия ──
@@ -177,6 +205,56 @@ async function main() {
   await setBalance(account.address, 3);
   s = await refreshBoost(jar);
   check("купил токен после входа → буст доступен без перелогина", s.boost === true);
+
+  // ── ЛЕСТНИЦА: множитель зависит от доли в эмиссии, а не от числа токенов ──
+  // Пока игрок был единственным холдером, он владел ~100% эмиссии и любой баланс давал
+  // вершину. Теперь эмиссию доминирует админ, и те же «несколько токенов» становятся
+  // пылью по доле — ровно та экономика, ради которой лестницу и вводили.
+  const others = 1_000_000n * 10n ** 18n;
+  await setBalanceRaw(admin.address, others);
+  const supplyOthers = (await totalSupply()) - (await balanceOf(account.address));
+
+  // Держим баланс с двукратным запасом внутрь ступени: округления bigint и чужие
+  // изменения эмиссии не должны ронять тест на самой границе.
+  const setShareTier = async (level) => {
+    await setBalanceRaw(account.address, rawForShare(HOLDER_TIERS[level].minPpb * 2, supplyOthers));
+    return refreshBoost(jar);
+  };
+
+  await setBalanceRaw(account.address, rawForShare(HOLDER_TIERS[1].minPpb / 10, supplyOthers));
+  s = await refreshBoost(jar);
+  check(
+    "доля вдесятеро ниже первой ступени → буста нет (раньше хватало 1 токена)",
+    s.boost === false && s.view.holder.level === 0,
+  );
+
+  s = await setShareTier(1);
+  check(
+    `доля первой ступени → ${HOLDER_TIERS[1].name} (${HOLDER_TIERS[1].mult}×)`,
+    s.view.holder.level === 1 && Math.abs(s.view.holder.mult - HOLDER_TIERS[1].mult) < 1e-9,
+  );
+
+  s = await setShareTier(3);
+  check(
+    `доля третьей ступени → ${HOLDER_TIERS[3].name}, множитель выше первой`,
+    s.view.holder.level === 3 && s.view.holder.mult > HOLDER_TIERS[1].mult,
+  );
+
+  s = await setShareTier(MAX_HOLDER_LEVEL);
+  check(
+    `доля вершины → ${HOLDER_TIERS[MAX_HOLDER_LEVEL].name} (${GAME.BOOST_MULT}×)`,
+    s.view.holder.level === MAX_HOLDER_LEVEL && s.view.nextHolder === null,
+  );
+
+  // Кит с кратно большей долей упирается в тот же потолок — иначе один кошелёк
+  // забирал бы призовой пул навсегда.
+  await setBalanceRaw(account.address, supplyOthers); // ~50% эмиссии
+  const whale = await refreshBoost(jar);
+  check(
+    "кит с половиной эмиссии не получает больше вершины",
+    whale.view.holder.level === MAX_HOLDER_LEVEL &&
+      Math.abs(whale.view.holder.mult - GAME.BOOST_MULT) < 1e-9,
+  );
 
   // ── аноним ──
   const anonJar = {};

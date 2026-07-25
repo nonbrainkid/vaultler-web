@@ -22,7 +22,7 @@ import {
   walletIdentity,
 } from "@/lib/auth";
 import { SESSION_COOKIE, SESSION_TTL_MS, signedCookieValue } from "@/lib/session";
-import { computeBoost } from "@/lib/vltr";
+import { computeHolderBoost } from "@/lib/vltr";
 import { getStore } from "@/lib/store";
 import { settle, toPublicView } from "@/lib/game";
 import { allowAuth, clientKey } from "@/lib/ratelimit";
@@ -144,13 +144,16 @@ export async function POST(req: NextRequest) {
   }
 
   const identity = walletIdentity(address);
-  const boost = await computeBoost(address); // серверное чтение on-chain
+  const holder = await computeHolderBoost(address, now); // серверное чтение on-chain
 
   const store = await getStore();
   const { state } = await store.mutate(identity, now, (s) => {
     const r = settle(s, now);
-    // null — RPC не ответил: оставляем прежнее значение, а не снимаем буст.
-    if (boost !== null) r.state.boost = boost;
+    // null — RPC не ответил: оставляем прежний тир, а не снимаем буст.
+    if (holder !== null) {
+      r.state.boostTier = holder.tier;
+      r.state.boostPpb = holder.ppb;
+    }
     return { state: r.state, result: r };
   });
 

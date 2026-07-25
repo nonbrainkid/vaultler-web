@@ -6,6 +6,7 @@ import TokenSection from "./components/TokenSection";
 import TrustSection from "./components/TrustSection";
 import Faq from "./components/Faq";
 import SiteFooter from "./components/SiteFooter";
+import { holderLadder } from "@/lib/game";
 
 // Динамический рендер: нужен для per-request nonce в строгом CSP (статический HTML
 // собирается один раз и nonce получить не может). Страница лёгкая, стоимость мала.
@@ -18,7 +19,9 @@ export default function Home() {
       <main id="main">
         <Hero />
         <HowItWorks />
-        <GameSection />
+        {/* Лестница холда статична — отдаём её пропсом с сервера, чтобы клиент не тянул
+            игровой модуль в бандл и не получал её заново с каждым поллингом. */}
+        <GameSection ladder={holderLadder()} />
         <TokenSection />
         <TrustSection />
         <Faq />

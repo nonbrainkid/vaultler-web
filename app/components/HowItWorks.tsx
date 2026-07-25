@@ -19,7 +19,7 @@ const STEPS = [
   {
     n: "04",
     t: "CLIMB THE BOARD",
-    d: "The top 10 of the weekly leaderboard split a pool funded by half of the token's trading fees, paid in real tokens. Hold $VLTR for the ×5 that gets you there.",
+    d: "The top 10 of the weekly leaderboard split a pool funded by half of the token's trading fees, paid in real tokens. Hold $VLTR to climb the boost ladder — up to ×5 stacking speed — and get there.",
   },
 ];
 

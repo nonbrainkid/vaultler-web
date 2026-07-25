@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PublicView } from "@/lib/game";
+import type { HolderTierView, PublicView } from "@/lib/game";
 import ConnectButton from "./components/ConnectButton";
 import ProfileEditor from "./components/ProfileEditor";
 import SafeSprite from "./components/SafeSprite";
@@ -20,9 +20,51 @@ interface CrankResponse extends StateResponse {
   ok: boolean;
   reason: string | null;
 }
+/** Ответ /api/boost/refresh: к стейту добавляет свой баланс и цену следующей ступени. */
+interface BoostResponse extends StateResponse {
+  stale?: boolean;
+  holderBalance?: string | null;
+  toNextTier?: string | null;
+}
 
+/**
+ * Стек с достаточной точностью, чтобы цифра ЖИЛА.
+ *
+ * `Math.floor` на прод-ставке (0.012/с при стрике 1) не менялся 83 секунды: игрок нажимал
+ * CRANK, видел неподвижный 0 и делал вывод, что игра сломана. Дробные разряды показываем,
+ * пока стек мал, и убираем, когда цифры и так растут заметно.
+ */
 function fmt(n: number): string {
-  return Math.floor(n).toLocaleString("en-US");
+  const digits = n < 100 ? 2 : n < 10_000 ? 1 : 0;
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+/** Круглые числа: пороги тиров и прочие константы — без дробной части. */
+function fmtWhole(n: number): string {
+  return Math.round(n).toLocaleString("en-US");
+}
+
+/** Множитель без хвоста из нулей: ×2, ×2.75. */
+function fmtMult(m: number): string {
+  return "×" + String(Math.round(m * 100) / 100);
+}
+
+/** Доля эмиссии: очень малые значения не должны схлопываться в «0%». */
+function fmtPct(p: number): string {
+  if (p <= 0) return "0%";
+  if (p < 0.001) return "<0.001%";
+  return `${Number(p.toPrecision(3))}%`;
+}
+
+/** Количество токенов из строки в единицах токена — только для показа. */
+function fmtTokens(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return n.toLocaleString("en-US", { maximumFractionDigits: n < 1 ? 4 : 0 });
 }
 
 function fmtLeft(ms: number): string {
@@ -38,12 +80,15 @@ function fmtLeft(ms: number): string {
 export default function Vault({
   rank = null,
   players = 0,
+  ladder,
   onStackChanged,
 }: {
   /** Место в недельном борде — определяет скин сейфа. */
   rank?: number | null;
   /** Размер комьюнити — от него зависит, какие скины вообще открыты. */
   players?: number;
+  /** Лестница холдерского буста (статична, приходит с сервера пропсом). */
+  ladder: HolderTierView[];
   onStackChanged?: () => void;
 }) {
   const [view, setView] = useState<PublicView | null>(null);
@@ -56,6 +101,9 @@ export default function Vault({
   const [boostBusy, setBoostBusy] = useState(false);
   /** Баланс прочитать не удалось — показываем последнее известное значение как неточное. */
   const [boostStale, setBoostStale] = useState(false);
+  /** Свой баланс $VLTR и сколько докупить до следующей ступени (из /api/boost/refresh). */
+  const [holderBalance, setHolderBalance] = useState<string | null>(null);
+  const [toNextTier, setToNextTier] = useState<string | null>(null);
   const [netErr, setNetErr] = useState(false);
   const flashRef = useRef<HTMLDivElement>(null);
   const chamberRef = useRef<HTMLDivElement>(null);
@@ -104,9 +152,11 @@ export default function Vault({
       // просто рановато. Оставляем экран как есть — кнопку можно нажать чуть позже.
       if (r.status === 429) return;
       if (!r.ok) throw new Error("boost refresh failed");
-      const d = (await r.json()) as StateResponse & { stale?: boolean };
+      const d = (await r.json()) as BoostResponse;
       applyResponse(d);
       setBoostStale(Boolean(d.stale));
+      setHolderBalance(d.holderBalance ?? null);
+      setToNextTier(d.toNextTier ?? null);
       setNetErr(false);
     } catch {
       setNetErr(true);
@@ -258,7 +308,7 @@ export default function Vault({
                 <>
                   next: {view.nextTierName}
                   <br />
-                  <b>{fmt(view.nextTierAt ?? 0)}</b> stack
+                  <b>{fmtWhole(view.nextTierAt ?? 0)}</b> stack
                 </>
               ) : (
                 <>
@@ -299,9 +349,20 @@ export default function Vault({
                     ))}
                   </div>
                 ) : (
+                  // Текст зависит от ФАЗЫ, а не от стека: на прод-ставке первые монеты
+                  // появляются не сразу, и «machine is off» во время завода просто врало.
                   <div className="empty">
-                    machine is off —<br />
-                    crank to start stacking
+                    {phase === "winding" ? (
+                      <>
+                        winding up —<br />
+                        first coins on the way
+                      </>
+                    ) : (
+                      <>
+                        machine is off —<br />
+                        crank to start stacking
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -364,7 +425,11 @@ export default function Vault({
               <>
                 <p className="boost-state">
                   <span className={"bpill" + (view?.boost ? " on" : "")}>
-                    {view?.boost ? "×5 ACTIVE" : "not holding $VLTR"}
+                    {view
+                      ? view.boost
+                        ? `${fmtMult(view.holder.mult)} ${view.holder.name}`
+                        : "no bag — ×1"
+                      : "…"}
                   </span>
                   <button
                     className="btn btn-ghost sm"
@@ -375,6 +440,56 @@ export default function Vault({
                     {boostBusy ? "…" : "RE-CHECK"}
                   </button>
                 </p>
+
+                {/* Лестница: видно, где ты стоишь и что даёт следующая ступень. Именно этого
+                    не давал прежний бинарный ×5 — купив порог, докупать было незачем. */}
+                <ul className="ladder">
+                  {ladder.map((t) => {
+                    const at = view?.holder.level === t.level;
+                    const done = (view?.holder.level ?? 0) > t.level;
+                    return (
+                      <li
+                        key={t.level}
+                        className={"lrow" + (at ? " at" : "") + (done ? " done" : "")}
+                        aria-current={at ? "step" : undefined}
+                      >
+                        <span className="lname">{t.name}</span>
+                        <span className="lneed">
+                          {t.level === 0 ? "no bag" : `${fmtPct(t.sharePct)} of supply`}
+                        </span>
+                        <span className="lmult">{fmtMult(t.mult)}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {view && (
+                  <p className="boost-next">
+                    {view.nextHolder ? (
+                      <>
+                        Your share: <b>{fmtPct(view.holderSharePct)}</b> of supply.{" "}
+                        {fmtTokens(toNextTier) ? (
+                          <>
+                            <b>+{fmtTokens(toNextTier)} $VLTR</b> puts you on{" "}
+                            {view.nextHolder.name} ({fmtMult(view.nextHolder.mult)}).
+                          </>
+                        ) : (
+                          <>
+                            {view.nextHolder.name} starts at{" "}
+                            {fmtPct(view.nextHolder.sharePct)} of supply and stacks{" "}
+                            {fmtMult(view.nextHolder.mult)}.
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        Top of the ladder — <b>{fmtMult(view.holder.mult)}</b>, the fastest
+                        the machine goes. Holding more won&apos;t stack faster.
+                      </>
+                    )}
+                  </p>
+                )}
+
                 {boostStale && (
                   <p className="muted-note warn">
                     Couldn&apos;t reach the network just now — showing the last confirmed
@@ -382,17 +497,30 @@ export default function Vault({
                   </p>
                 )}
                 <p className="muted-note">
-                  Wallet linked. We read your $VLTR balance on-chain — nothing is deposited
-                  or locked. The boost is locked in when you crank, so hold before you wind.
+                  {fmtTokens(holderBalance) && <>You hold {fmtTokens(holderBalance)} $VLTR. </>}
+                  Your step is your share of the total supply, so it moves as the token
+                  does — and it is re-checked every time you crank. We only read a public
+                  balance on-chain: nothing is deposited, locked or transferred.
                 </p>
               </>
             ) : (
               <>
                 <p className="muted-note">
-                  Hold <b>$VLTR</b> to stack <b>×5</b> faster — that&apos;s how you reach the
-                  top 10 that splits the weekly pool. Connect a wallet to link your account:
-                  one signature, no gas, no custody.
+                  The bigger your share of $VLTR, the higher your step on the ladder — from{" "}
+                  <b>{fmtMult(ladder[1]?.mult ?? 1.5)}</b> up to{" "}
+                  <b>{fmtMult(ladder[ladder.length - 1]?.mult ?? 5)}</b>. That speed is how
+                  players reach the top 10 that splits the weekly pool. Connect a wallet to
+                  link your account: one signature, no gas, no custody.
                 </p>
+                <ul className="ladder">
+                  {ladder.slice(1).map((t) => (
+                    <li key={t.level} className="lrow">
+                      <span className="lname">{t.name}</span>
+                      <span className="lneed">{fmtPct(t.sharePct)} of supply</span>
+                      <span className="lmult">{fmtMult(t.mult)}</span>
+                    </li>
+                  ))}
+                </ul>
                 <div className="boost-connect">
                   <ConnectButton wallet={wallet} onChanged={refetch} />
                 </div>
@@ -416,7 +544,7 @@ export default function Vault({
               <li>Miss it → raider skims your stack, streak resets.</li>
               <li>Top 10 of the weekly board split the fee pool.</li>
               <li>Climb the board to unlock better safe skins.</li>
-              <li>Play free — hold $VLTR for the ×5 that gets you into the top 10.</li>
+              <li>Play free — your $VLTR share sets your step, up to ×5.</li>
             </ul>
           </div>
         </aside>

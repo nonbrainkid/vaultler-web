@@ -2,7 +2,7 @@ const FLYWHEEL = [
   "You play the game",
   "You want the top 10",
   "You buy & hold $VLTR",
-  "You stack ×5 faster",
+  "A bigger share = a higher step",
   "You climb into the top 10",
   "Trades generate fees",
   "Half the fees pay the top 10",
@@ -19,12 +19,13 @@ export default function TokenSection() {
 
         <div className="cards-3">
           <article className="card">
-            <h3 className="card-h neon">HOLD = ×5 RATE</h3>
+            <h3 className="card-h neon">HOLD = A HIGHER STEP</h3>
             <p>
-              Holding $VLTR multiplies your stacking rate by <b>5</b> (non-holders stack at
-              ×1). That&apos;s the utility — no deposit, no lockup, no staking contract. The
-              site just reads your wallet balance on-chain. The ×5 is how you realistically
-              reach the top 10.
+              Your $VLTR bag puts you on a <b>ladder</b>: five steps from <b>×1.5</b> to{" "}
+              <b>×5</b> stacking speed, and each step asks for a bigger share of the total
+              supply. Non-holders stack at ×1. That&apos;s the utility — no deposit, no
+              lockup, no staking contract, the site just reads your balance on-chain. Speed
+              is capped at ×5, so no bag is big enough to own the board outright.
             </p>
           </article>
 

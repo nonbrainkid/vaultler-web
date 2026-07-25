@@ -3,12 +3,13 @@
 import { useCallback, useState } from "react";
 import Vault from "../Vault";
 import Leaderboard from "../Leaderboard";
+import type { HolderTierView } from "@/lib/game";
 
 /**
  * Обёртка игры и лидерборда: держит общий сигнал обновления, чтобы после кранка
  * борд перечитался. Это две разные секции страницы, но состояние у них общее.
  */
-export default function GameSection() {
+export default function GameSection({ ladder }: { ladder: HolderTierView[] }) {
   const [lbKey, setLbKey] = useState(0);
   // Ранг считает сервер (в /api/leaderboard). Держим его здесь и отдаём в игру —
   // от него зависит скин сейфа, так не нужен тяжёлый пересчёт на каждый опрос.
@@ -31,6 +32,7 @@ export default function GameSection() {
           <Vault
             rank={rank}
             players={players}
+            ladder={ladder}
             onStackChanged={() => setLbKey((k) => k + 1)}
           />
         </div>

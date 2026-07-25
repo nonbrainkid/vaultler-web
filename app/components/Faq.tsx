@@ -1,7 +1,7 @@
 const QA = [
   {
     q: "Do I need to buy anything to play?",
-    a: "No. The game is free and works without a wallet. Holding $VLTR multiplies your stacking rate by 5 — a big edge, since the ×5 is realistically what gets you into the paid top 10. But anyone can play, earn $STACK and unlock skins.",
+    a: "No. The game is free and works without a wallet. Holding $VLTR puts you on the boost ladder — five steps from ×1.5 to ×5 stacking speed, depending on how big your share of the supply is. That speed is realistically what gets you into the paid top 10. But anyone can play, earn $STACK and unlock skins.",
   },
   {
     q: "What can you do with my wallet once I connect?",
@@ -17,7 +17,7 @@ const QA = [
   },
   {
     q: "So holding pays me a cut of fees — is that a dividend?",
-    a: "No. The pool is a prize for the top 10 players on the weekly board, earned by playing — not a payout on your balance. Holding just makes you stack faster (×5). Two people with the same tokens can finish very differently depending on how they play. It is a game prize, not a share of profits.",
+    a: "No. The pool is a prize for the top 10 players on the weekly board, earned by playing — not a payout on your balance. Holding only changes how fast the machine stacks, and the speed is capped at ×5 no matter how much you hold. You still have to crank every day: two people with identical bags finish very differently depending on how they play, and a player with no tokens at all can outrank a holder who sleeps through the window. It is a game prize, not a share of profits.",
   },
   {
     q: "Is the code audited?",

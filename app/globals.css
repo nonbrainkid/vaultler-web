@@ -600,6 +600,81 @@ body {
 .boost-connect {
   margin-top: 12px;
 }
+
+/* ───────────── лестница холдерского буста ─────────────
+   Ступени видны все сразу и намеренно: игрок должен понимать, что даст следующая доля.
+   Прежний бинарный ×5 такой цели не показывал — купил порог и остановился. */
+.ladder {
+  list-style: none;
+  display: grid;
+  gap: 3px;
+  margin: 10px 0;
+}
+.lrow {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  background: #0d0904;
+  border: 2px solid var(--wood-darker);
+  font-size: 13px;
+  color: var(--muted);
+}
+.lname {
+  font-family: var(--pixel);
+  font-size: 8px;
+  letter-spacing: 0.5px;
+}
+.lneed {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+.lmult {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--sand);
+  min-width: 34px;
+  text-align: right;
+}
+/* пройденные ступени — приглушены, текущая — подсвечена неоном */
+.lrow.done {
+  opacity: 0.55;
+}
+.lrow.done .lmult {
+  color: var(--neon);
+}
+.lrow.at {
+  border-color: var(--neon);
+  background: #101c08;
+  color: var(--sand);
+}
+.lrow.at .lname,
+.lrow.at .lmult {
+  color: var(--neon-hi);
+}
+.boost-next {
+  font-size: 14px;
+  color: var(--sand);
+  margin-bottom: 8px;
+}
+.boost-next b {
+  color: var(--neon);
+}
+@media (max-width: 480px) {
+  /* На узком экране порог уезжает под название, чтобы множитель не сжимался. */
+  .lrow {
+    grid-template-columns: 1fr auto;
+  }
+  .lneed {
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 12px;
+  }
+  .lmult {
+    grid-row: 1 / span 2;
+  }
+}
 .rules-list {
   list-style: none;
   display: grid;

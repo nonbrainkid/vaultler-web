@@ -1,12 +1,22 @@
 import { describe, it, expect } from "vitest";
 import {
   GAME,
+  HOLDER_TIERS,
+  MAX_HOLDER_LEVEL,
+  MAX_SHARE_PPB,
+  clampHolderLevel,
   crank,
+  holderMult,
+  holderTierFromPpb,
+  hydrateState,
+  nextHolderTier,
   settle,
   phase,
   multiplier,
   ratePerSec,
+  sharePctFromPpb,
   tierIndex,
+  toPublicView,
   initialState,
   type PlayerState,
 } from "./game";
@@ -21,23 +31,108 @@ function fresh(): PlayerState {
 
 describe("экономика", () => {
   it("множитель растёт со стриком", () => {
-    expect(multiplier(1, false)).toBeCloseTo(1.2);
-    expect(multiplier(5, false)).toBeCloseTo(2.0);
+    expect(multiplier(1, 0)).toBeCloseTo(1.2);
+    expect(multiplier(5, 0)).toBeCloseTo(2.0);
   });
 
-  it("буст за холд даёт ×5 (не-холдер ×1)", () => {
+  it("верхний тир холда даёт ×5, отсутствие холда — ×1", () => {
     expect(GAME.BOOST_MULT).toBe(5);
-    expect(multiplier(1, true)).toBeCloseTo(1.2 * 5);
-    expect(multiplier(1, false)).toBeCloseTo(1.2); // без холда — только стрик
-    expect(ratePerSec(1, true)).toBeCloseTo(GAME.BASE_RATE_PER_SEC * 1.2 * 5);
+    expect(multiplier(1, MAX_HOLDER_LEVEL)).toBeCloseTo(1.2 * 5);
+    expect(multiplier(1, 0)).toBeCloseTo(1.2); // без холда — только стрик
+    expect(ratePerSec(1, MAX_HOLDER_LEVEL)).toBeCloseTo(GAME.BASE_RATE_PER_SEC * 1.2 * 5);
   });
 
-  it("тиры по порогам стека", () => {
+  it("тиры по стеку — по порогам", () => {
     expect(tierIndex(0)).toBe(0);
     expect(tierIndex(499)).toBe(0);
     expect(tierIndex(500)).toBe(1);
     expect(tierIndex(50000)).toBe(4);
     expect(tierIndex(999999)).toBe(4);
+  });
+});
+
+/**
+ * Лестница холда — главный экономический рычаг: она решает, зачем держать БОЛЬШЕ
+ * минимума. Поэтому проверяем не только границы, но и форму кривой.
+ */
+describe("лестница холдерского буста", () => {
+  it("ступени идут строго по возрастанию и порога, и множителя", () => {
+    for (let i = 1; i < HOLDER_TIERS.length; i++) {
+      expect(HOLDER_TIERS[i].minPpb).toBeGreaterThan(HOLDER_TIERS[i - 1].minPpb);
+      expect(HOLDER_TIERS[i].mult).toBeGreaterThan(HOLDER_TIERS[i - 1].mult);
+    }
+  });
+
+  it("верх лестницы равен GAME.BOOST_MULT — экономику пула не инфлируем", () => {
+    expect(HOLDER_TIERS[MAX_HOLDER_LEVEL].mult).toBe(GAME.BOOST_MULT);
+    expect(holderMult(MAX_HOLDER_LEVEL)).toBe(5);
+  });
+
+  it("тир по доле в эмиссии: граница включительно, ниже порога — предыдущая ступень", () => {
+    expect(holderTierFromPpb(0)).toBe(0);
+    expect(holderTierFromPpb(HOLDER_TIERS[1].minPpb - 1)).toBe(0);
+    expect(holderTierFromPpb(HOLDER_TIERS[1].minPpb)).toBe(1);
+    expect(holderTierFromPpb(HOLDER_TIERS[3].minPpb)).toBe(3);
+    expect(holderTierFromPpb(HOLDER_TIERS[3].minPpb - 1)).toBe(2);
+    expect(holderTierFromPpb(HOLDER_TIERS[MAX_HOLDER_LEVEL].minPpb)).toBe(MAX_HOLDER_LEVEL);
+  });
+
+  /**
+   * Кит с половиной эмиссии не должен получать больше холдера с 0.5%: иначе один кошелёк
+   * забирает призовой пул навсегда, и игра для остальных заканчивается.
+   */
+  it("выше вершины множитель не растёт — кит упирается в тот же ×5", () => {
+    const top = HOLDER_TIERS[MAX_HOLDER_LEVEL].minPpb;
+    expect(holderTierFromPpb(top * 100)).toBe(MAX_HOLDER_LEVEL);
+    expect(holderTierFromPpb(1e9)).toBe(MAX_HOLDER_LEVEL); // 100% эмиссии
+    expect(holderMult(99)).toBe(GAME.BOOST_MULT);
+  });
+
+  /**
+   * Смысл кривой: бэг растёт на порядки, ставка — в разы. Иначе крупный холдер отрывается
+   * так, что остальным нет смысла играть.
+   */
+  it("кривая сильно вогнутая: ×500 к бэгу даёт меньше ×4 к ставке", () => {
+    const first = HOLDER_TIERS[1];
+    const top = HOLDER_TIERS[MAX_HOLDER_LEVEL];
+    const bagRatio = top.minPpb / first.minPpb;
+    const multRatio = top.mult / first.mult;
+    expect(bagRatio).toBeGreaterThan(100); // бэг больше в сотни раз
+    expect(multRatio).toBeLessThan(4); // ставка — меньше чем вчетверо
+  });
+
+  /**
+   * Анти-сивил: дробить бэг по кошелькам не должно повышать множитель ни одного из них.
+   * Это следствие вогнутости порогов — доля каждого кошелька падает пропорционально.
+   */
+  it("дробление бэга снижает тир каждого кошелька", () => {
+    const whole = HOLDER_TIERS[MAX_HOLDER_LEVEL].minPpb; // ровно вершина
+    expect(holderTierFromPpb(whole)).toBe(MAX_HOLDER_LEVEL);
+    for (const parts of [2, 5, 10]) {
+      expect(holderTierFromPpb(whole / parts)).toBeLessThan(MAX_HOLDER_LEVEL);
+    }
+  });
+
+  it("битый или выходящий за диапазон уровень трактуется как «буста нет»", () => {
+    expect(clampHolderLevel(-3)).toBe(0);
+    expect(clampHolderLevel(NaN)).toBe(0);
+    expect(clampHolderLevel("5" as unknown)).toBe(0);
+    expect(clampHolderLevel(undefined)).toBe(0);
+    expect(clampHolderLevel(999)).toBe(MAX_HOLDER_LEVEL);
+    // и по долям тоже: мусор не должен превращаться в множитель
+    expect(holderTierFromPpb(NaN)).toBe(0);
+    expect(holderTierFromPpb(-1)).toBe(0);
+  });
+
+  it("ppb переводится в проценты эмиссии", () => {
+    expect(sharePctFromPpb(10_000)).toBeCloseTo(0.001); // 0.001% эмиссии
+    expect(sharePctFromPpb(5_000_000)).toBeCloseTo(0.5);
+    expect(sharePctFromPpb(1e9)).toBeCloseTo(100);
+  });
+
+  it("на вершине следующей ступени нет", () => {
+    expect(nextHolderTier(0)?.level).toBe(1);
+    expect(nextHolderTier(MAX_HOLDER_LEVEL)).toBeNull();
   });
 });
 
@@ -92,54 +187,151 @@ describe("кранк", () => {
   });
 });
 
-// Буст даёт ×5 к начислению, поэтому важно КОГДА он применяется.
-describe("буст на кранке", () => {
-  it("успешный кранк ставит свежий буст", () => {
-    const r = crank(fresh(), T0, true);
-    expect(r.state.boost).toBe(true);
+// Тир холда множит начисление, поэтому важно КОГДА он применяется.
+describe("тир холда на кранке", () => {
+  const TOP = { tier: MAX_HOLDER_LEVEL, ppb: HOLDER_TIERS[MAX_HOLDER_LEVEL].minPpb };
+  const NONE = { tier: 0, ppb: 0 };
+  const MID = { tier: 2, ppb: HOLDER_TIERS[2].minPpb };
+
+  it("успешный кранк ставит свежий тир вместе с долей", () => {
+    const r = crank(fresh(), T0, TOP);
+    expect(r.state.boostTier).toBe(MAX_HOLDER_LEVEL);
+    expect(r.state.boostPpb).toBe(TOP.ppb);
+  });
+
+  it("тир понижается, если игрок продал часть бэга", () => {
+    const held = crank(fresh(), T0, TOP).state;
+    const after = crank(held, T0 + GAME.WIND_MS + HOUR, MID);
+    expect(after.state.boostTier).toBe(2);
   });
 
   it("снимает буст, если игрок больше не холдит", () => {
-    const held = crank(fresh(), T0, true).state;
-    const after = crank(held, T0 + GAME.WIND_MS + HOUR, false);
-    expect(after.state.boost).toBe(false);
+    const held = crank(fresh(), T0, TOP).state;
+    const after = crank(held, T0 + GAME.WIND_MS + HOUR, NONE);
+    expect(after.state.boostTier).toBe(0);
   });
 
-  it("null (RPC не ответил) оставляет прежний буст, а не снимает его", () => {
-    const held = crank(fresh(), T0, true).state;
+  it("null (RPC не ответил) оставляет прежний тир, а не снимает его", () => {
+    const held = crank(fresh(), T0, TOP).state;
     const after = crank(held, T0 + GAME.WIND_MS + HOUR, null);
-    expect(after.state.boost).toBe(true);
+    expect(after.state.boostTier).toBe(MAX_HOLDER_LEVEL);
   });
 
-  it("undefined (не проверяли) тоже не трогает буст", () => {
-    const held = crank(fresh(), T0, true).state;
-    expect(crank(held, T0 + GAME.WIND_MS + HOUR).state.boost).toBe(true);
+  it("undefined (не проверяли) тоже не трогает тир", () => {
+    const held = crank(fresh(), T0, TOP).state;
+    expect(crank(held, T0 + GAME.WIND_MS + HOUR).state.boostTier).toBe(MAX_HOLDER_LEVEL);
   });
 
-  it("отклонённый кранк буст не меняет — ставка завода уже зафиксирована", () => {
-    const held = crank(fresh(), T0, true).state;
-    const rejected = crank(held, T0 + HOUR, false); // ещё winding
+  it("отклонённый кранк тир не меняет — ставка завода уже зафиксирована", () => {
+    const held = crank(fresh(), T0, TOP).state;
+    const rejected = crank(held, T0 + HOUR, NONE); // ещё winding
     expect(rejected.ok).toBe(false);
-    expect(rejected.state.boost).toBe(true);
+    expect(rejected.state.boostTier).toBe(MAX_HOLDER_LEVEL);
+  });
+
+  it("подсунутый уровень вне лестницы не даёт множителя больше вершины", () => {
+    const r = crank(fresh(), T0, { tier: 42, ppb: 1e12 });
+    expect(r.state.boostTier).toBe(MAX_HOLDER_LEVEL);
+    expect(multiplier(r.state.streak, r.state.boostTier)).toBeCloseTo(1.2 * GAME.BOOST_MULT);
   });
 
   /**
-   * Ключевой инвариант: буст задаёт ставку СЛЕДУЮЩЕГО завода. Если применить его до
+   * Доля больше 100% эмиссии физически невозможна, но битый токен может отдать
+   * `balanceOf > totalSupply`. Такое значение не должно уехать в стейт: колонка `Int`
+   * его не вместит, и запись игрока упала бы целиком.
+   */
+  it("доля обрезается по 100% эмиссии", () => {
+    expect(crank(fresh(), T0, { tier: 5, ppb: 1e12 }).state.boostPpb).toBe(MAX_SHARE_PPB);
+    expect(crank(fresh(), T0, { tier: 1, ppb: -5 }).state.boostPpb).toBe(0);
+    expect(crank(fresh(), T0, { tier: 1, ppb: NaN }).state.boostPpb).toBe(0);
+    expect(hydrateState({ lastSettleAt: T0, boostTier: 5, boostPpb: 9e15 }, T0).boostPpb).toBe(
+      MAX_SHARE_PPB,
+    );
+  });
+
+  /**
+   * Ключевой инвариант: тир задаёт ставку СЛЕДУЮЩЕГО завода. Если применить его до
    * settle, уже отработавший отрезок пересчитается по новому множителю задним числом —
    * игрок получил бы ×5 за сутки, которые стакал без токена (или наоборот потерял бы).
    */
   it("не пересчитывает задним числом уже начисленный отрезок", () => {
-    const noBoost = crank(fresh(), T0, false).state;
+    const noBoost = crank(fresh(), T0, NONE).state;
     const readyAt = T0 + GAME.WIND_MS + HOUR; // полный завод без буста
 
-    const withNewBoost = crank(noBoost, readyAt, true);
-    const withoutBoost = crank(noBoost, readyAt, false);
+    const withNewBoost = crank(noBoost, readyAt, TOP);
+    const withoutBoost = crank(noBoost, readyAt, NONE);
 
     // Стек за прошедший завод одинаков: включение буста прошлое не трогает.
     expect(withNewBoost.state.stack).toBeCloseTo(withoutBoost.state.stack, 9);
     // А ставка на следующий завод уже разная.
-    expect(withNewBoost.state.boost).toBe(true);
-    expect(withoutBoost.state.boost).toBe(false);
+    expect(withNewBoost.state.boostTier).toBe(MAX_HOLDER_LEVEL);
+    expect(withoutBoost.state.boostTier).toBe(0);
+  });
+
+  it("чем выше тир, тем быстрее стек за тот же завод", () => {
+    const stacks = HOLDER_TIERS.map((t) => {
+      const s = crank(fresh(), T0, { tier: t.level, ppb: t.minPpb }).state;
+      return settle(s, T0 + GAME.WIND_MS).state.stack;
+    });
+    for (let i = 1; i < stacks.length; i++) {
+      expect(stacks[i]).toBeGreaterThan(stacks[i - 1]);
+    }
+  });
+});
+
+describe("стейт из хранилища (hydrateState)", () => {
+  it("пустая/битая запись — свежий стейт", () => {
+    expect(hydrateState(undefined, T0)).toEqual(initialState(T0));
+    expect(hydrateState("нет", T0)).toEqual(initialState(T0));
+    expect(hydrateState({ stack: "много" }, T0).stack).toBe(0);
+  });
+
+  it("сохраняет нормальные поля", () => {
+    const s = crank(fresh(), T0, { tier: 3, ppb: 250_000 }).state;
+    expect(hydrateState(JSON.parse(JSON.stringify(s)), T0)).toEqual(s);
+  });
+
+  /**
+   * Старый формат (булев `boost`) поднимаем только до ПЕРВОЙ ступени: выдать по нему
+   * ×5 значило бы раздать верхний множитель всем, у кого когда-то был минимальный холд.
+   * Реальную долю всё равно перечитает следующий кранк.
+   */
+  it("легаси boost:true → первая ступень, а не вершина", () => {
+    const legacy = { stack: 10, streak: 2, lastSettleAt: T0, boost: true };
+    expect(hydrateState(legacy, T0).boostTier).toBe(1);
+  });
+
+  it("легаси boost:false → без буста", () => {
+    expect(hydrateState({ lastSettleAt: T0, boost: false }, T0).boostTier).toBe(0);
+  });
+
+  it("явный boostTier важнее легаси-флага", () => {
+    expect(hydrateState({ boost: true, boostTier: 4, lastSettleAt: T0 }, T0).boostTier).toBe(4);
+  });
+});
+
+describe("публичный вид для UI", () => {
+  it("отдаёт текущую и следующую ступень холда", () => {
+    const s = crank(fresh(), T0, { tier: 1, ppb: 12_345 }).state;
+    const v = toPublicView(s, T0);
+    expect(v.boost).toBe(true);
+    expect(v.holder.level).toBe(1);
+    expect(v.holder.mult).toBe(HOLDER_TIERS[1].mult);
+    expect(v.nextHolder?.level).toBe(2);
+    expect(v.nextHolder?.sharePct).toBeCloseTo(sharePctFromPpb(HOLDER_TIERS[2].minPpb));
+    expect(v.holderSharePct).toBeCloseTo(sharePctFromPpb(12_345));
+  });
+
+  it("на вершине следующей ступени не обещает", () => {
+    const s = crank(fresh(), T0, { tier: MAX_HOLDER_LEVEL, ppb: 9_000_000 }).state;
+    expect(toPublicView(s, T0).nextHolder).toBeNull();
+  });
+
+  it("без холда буст выключен и первая ступень показана как цель", () => {
+    const v = toPublicView(fresh(), T0);
+    expect(v.boost).toBe(false);
+    expect(v.holder.mult).toBe(1);
+    expect(v.nextHolder?.level).toBe(1);
   });
 });
 
@@ -171,7 +363,7 @@ describe("начисление стека (settle)", () => {
   it("стек капает по ставке за секунды внутри окна завода", () => {
     const s = crank(fresh(), T0).state; // streak 1
     const r = settle(s, T0 + 100_000); // 100 секунд
-    const expected = ratePerSec(1, false) * 100;
+    const expected = ratePerSec(1, 0) * 100;
     expect(r.accrued).toBeCloseTo(expected);
     expect(r.state.stack).toBeCloseTo(expected);
   });
@@ -181,7 +373,7 @@ describe("начисление стека (settle)", () => {
     // settle далеко за WIND, но всё ещё в grace (не stall)
     const t = T0 + GAME.WIND_MS + HOUR;
     const r = settle(s, t);
-    const expected = ratePerSec(1, false) * (GAME.WIND_MS / 1000);
+    const expected = ratePerSec(1, 0) * (GAME.WIND_MS / 1000);
     expect(r.state.stack).toBeCloseTo(expected);
     expect(r.raid).toBeNull();
   });

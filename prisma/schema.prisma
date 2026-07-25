@@ -21,7 +21,12 @@ model Player {
   lastCrankAt  BigInt? // epoch ms
   lastSettleAt BigInt // epoch ms
   machineOn    Boolean  @default(false)
-  boost        Boolean  @default(false)
+  // Холдерский буст: уровень ступени лестницы HOLDER_TIERS (0 — не холдит) и доля игрока
+  // в эмиссии токена в ppb на момент последнего чтения чейна. Ставит только сервер.
+  // Долю храним, чтобы показывать прогресс до следующей ступени без запроса к RPC
+  // и чтобы при разборе спора было видно, ПОЧЕМУ выдан именно этот множитель.
+  boostTier    Int      @default(0)
+  boostPpb     Int      @default(0)
   // Ник для лидерборда: nickname — как показывать, nicknameKey — lowercase для уникальности.
   nickname     String?
   nicknameKey  String?  @unique
