@@ -1,3 +1,5 @@
+import ContractAddress from "./ContractAddress";
+
 const FLYWHEEL = [
   "You play the game",
   "You want the top 10",
@@ -16,6 +18,8 @@ export default function TokenSection() {
         <p className="section-lead">
           A meme with a reason to hold — not a dog coin, not a promise of returns.
         </p>
+
+        <ContractAddress />
 
         <div className="cards-3">
           <article className="card">

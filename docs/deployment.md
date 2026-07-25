@@ -33,7 +33,7 @@
 | `NEXT_PUBLIC_RH_RPC_URL` | пусто | пусто → чтение баланса выключено |
 | `NEXT_PUBLIC_RH_NAME` | `Robinhood Chain` | подпись сети в UI |
 | `NEXT_PUBLIC_RH_EXPLORER` | пусто | ссылки на адреса в борде |
-| `NEXT_PUBLIC_VLTR_ADDRESS` | пусто | адрес токена |
+| `NEXT_PUBLIC_VLTR_ADDRESS` | реальный адрес в `lib/chain.ts` | переопределение адреса токена (тестовая сеть / anvil). Дефолт держим в коде: адрес публичен, а опечатка в поле панели уехала бы в прод без ревью |
 | `NEXT_PUBLIC_VLTR_DECIMALS` | `18` | десятичные |
 | `NEXT_PUBLIC_VLTR_BOOST_MIN` | `1` | абсолютный анти-дуст-минимум. Сам множитель задаётся долей в эмиссии (`HOLDER_TIERS`), см. `docs/game-mechanics.md` |
 | `NEXT_PUBLIC_WC_PROJECT_ID` | пусто | WalletConnect (опционально) |
@@ -91,7 +91,7 @@ OG-картинке останется `http://localhost:3000`. Серверны
 - [ ] `/api/health` → `clientIp:"trusted"`. `"session"` означает, что перед приложением
       нет прокси с доверенным IP, и лимиты держатся на легко сбрасываемой cookie.
 - [ ] `node scripts/seed-bots.mjs --clear` — убрать тестовых ботов.
-- [ ] Реальный конфиг сети и адрес $VLTR подставлены (иначе холдерский буст просто не включается).
+- [ ] Реальный конфиг сети (`NEXT_PUBLIC_RH_RPC_URL`, chainId, explorer) подставлен — адрес токена уже в коде, но без RPC `VLTR_CONFIGURED` остаётся false и буст не включается.
 - [ ] `npx prisma db push` после смены схемы `boost` → `boostTier`/`boostPpb`.
 - [ ] Баланс прода (`BASE_RATE_PER_SEC`, пороги тиров) откалиброван — сейчас плейсхолдеры.
 - [ ] Политика выплат пула зафиксирована (реальные токены, вручную — решение за Егором).

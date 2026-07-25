@@ -17,8 +17,16 @@ const STATUS = [
   { s: "live", t: "The game", d: "Playable right now, no wallet required." },
   { s: "live", t: "Server-side scoring", d: "Stacks, streaks and anti-cheat are running." },
   { s: "live", t: "Weekly leaderboard", d: "Live ranking and community vault." },
-  { s: "wip", t: "$VLTR token", d: "Not launched yet. Fair launch via launchpad." },
-  { s: "wip", t: "On-chain boost", d: "Wired up, switches on when the token exists." },
+  {
+    s: "wip",
+    t: "$VLTR token",
+    d: "Contract is deployed — address is in the $VLTR section above. Trading opens at fair launch via launchpad.",
+  },
+  {
+    s: "wip",
+    t: "On-chain boost",
+    d: "Wired up and re-checked on every crank; switches on once the network RPC is configured.",
+  },
   { s: "todo", t: "Contract audit", d: "Not audited. No contract holds funds today." },
 ];
 

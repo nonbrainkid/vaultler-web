@@ -515,6 +515,66 @@ body {
   gap: 12px;
   margin-bottom: 16px;
 }
+
+/* ───────────── адрес контракта ─────────────
+   Адрес выводится ЦЕЛИКОМ и моноширинным: сокращённый вид нельзя сверить с тем, что
+   вставилось в кошелёк, а именно на этом строится подмена буфера обмена. */
+.ca {
+  padding: 14px;
+  margin-bottom: 16px;
+  background: var(--ink);
+  border: 3px solid var(--wood-darker);
+}
+.ca-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.ca-label {
+  font-family: var(--pixel);
+  font-size: 9px;
+  color: var(--neon);
+  letter-spacing: 0.5px;
+}
+.ca-chain {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--muted);
+}
+.ca-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ca-addr {
+  flex: 1 1 320px;
+  min-width: 0;
+  font-family: var(--read);
+  font-size: 15px;
+  color: var(--bone);
+  background: #0d0904;
+  border: 2px solid var(--wood-dark);
+  padding: 9px 10px;
+  /* 42 символа должны переноситься, а не растягивать страницу по горизонтали */
+  word-break: break-all;
+  user-select: all;
+}
+.ca-note {
+  margin-top: 9px;
+  font-size: 13px;
+  color: var(--muted);
+}
+@media (max-width: 480px) {
+  .ca-addr {
+    font-size: 13px;
+  }
+  .ca-copy {
+    flex: 1 1 auto;
+  }
+}
 .flywheel {
   margin-bottom: 16px;
 }
