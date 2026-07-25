@@ -15,6 +15,19 @@ export interface PlayerSnapshot {
   state: PlayerState;
 }
 
+export interface ProfilePatch {
+  /** undefined — не менять; null — очистить; строка — установить (уже провалидирована). */
+  nickname?: string | null;
+  hideWallet?: boolean;
+}
+
+export interface SetProfileResult {
+  ok: boolean;
+  /** "nickname_taken", если ник уже занят другим игроком. */
+  error?: string;
+  state: PlayerState;
+}
+
 export interface MutateOutcome<R> {
   state: PlayerState;
   result: R;
@@ -43,6 +56,16 @@ export interface Store {
    * делает сервисный слой (lib/leaderboard.ts), стор только отдаёт сырые данные.
    */
   snapshot(): Promise<PlayerSnapshot[]>;
+
+  /**
+   * Установить ник/приватность атомарно. Ник проверяется на глобальную уникальность
+   * (без регистра); при коллизии — ok:false, error:"nickname_taken".
+   */
+  setProfile(
+    identity: string,
+    now: number,
+    patch: ProfilePatch,
+  ): Promise<SetProfileResult>;
 }
 
 let _store: Store | null = null;

@@ -22,6 +22,11 @@ model Player {
   lastSettleAt BigInt // epoch ms
   machineOn    Boolean  @default(false)
   boost        Boolean  @default(false)
+  // Ник для лидерборда: nickname — как показывать, nicknameKey — lowercase для уникальности.
+  nickname     String?
+  nicknameKey  String?  @unique
+  // Скрыть адрес кошелька на борде (по умолчанию открыт для прозрачности).
+  hideWallet   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

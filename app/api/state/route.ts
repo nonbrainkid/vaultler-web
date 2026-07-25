@@ -24,5 +24,7 @@ export async function GET(req: NextRequest) {
     view: toPublicView(settled.state, now),
     raid: settled.raid, // если игрок как раз простоял окно — покажем рейд
     wallet: addressFromIdentity(identity), // адрес, если сессия привязана к кошельку
+    nickname: settled.state.nickname, // свой ник (для редактора)
+    hideWallet: settled.state.hideWallet, // своя настройка приватности
   });
 }

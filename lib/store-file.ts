@@ -5,7 +5,14 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { initialState, type PlayerState } from "./game";
-import type { MutateOutcome, PlayerSnapshot, Store } from "./store";
+import { nicknameKey } from "./profile";
+import type {
+  MutateOutcome,
+  PlayerSnapshot,
+  ProfilePatch,
+  SetProfileResult,
+  Store,
+} from "./store";
 
 export class FileStore implements Store {
   private data: Record<string, PlayerState> | null = null;
@@ -13,6 +20,8 @@ export class FileStore implements Store {
   private writeChain: Promise<void> = Promise.resolve();
   /** Per-identity локи: сериализуют read-modify-write по каждому игроку. */
   private locks = new Map<string, Promise<unknown>>();
+  /** Глобальный лок на смену профиля: проверка уникальности ника видит всех разом. */
+  private profileChain: Promise<unknown> = Promise.resolve();
 
   private async ensureLoaded(): Promise<void> {
     if (this.data) return;
@@ -75,5 +84,40 @@ export class FileStore implements Store {
       identity,
       state: { ...state },
     }));
+  }
+
+  async setProfile(
+    identity: string,
+    now: number,
+    patch: ProfilePatch,
+  ): Promise<SetProfileResult> {
+    await this.ensureLoaded();
+    // Сериализуем ВСЕ смены профиля: иначе два игрока могли бы одновременно пройти
+    // проверку «ник свободен» и оба его занять (per-identity лок этого не ловит).
+    const run = this.profileChain.then(() =>
+      this.withLock(identity, async () => {
+      const current: PlayerState = { ...(this.data![identity] ?? initialState(now)) };
+
+      if (patch.nickname !== undefined) {
+        if (patch.nickname === null) {
+          current.nickname = null;
+        } else {
+          const key = nicknameKey(patch.nickname);
+          const taken = Object.entries(this.data!).some(
+            ([id, s]) => id !== identity && s.nickname && nicknameKey(s.nickname) === key,
+          );
+          if (taken) return { ok: false, error: "nickname_taken", state: current };
+          current.nickname = patch.nickname;
+        }
+      }
+      if (patch.hideWallet !== undefined) current.hideWallet = patch.hideWallet;
+
+      this.data![identity] = current;
+      await this.persist();
+      return { ok: true, state: current };
+      }),
+    ) as Promise<SetProfileResult>;
+    this.profileChain = run.catch(() => {});
+    return run;
   }
 }

@@ -2,13 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+const EXPLORER = process.env.NEXT_PUBLIC_RH_EXPLORER || "";
+
 interface LeaderRow {
   rank: number;
   label: string;
   kind: "wallet" | "anon" | "bot";
+  address: string | null;
   stack: number;
   streak: number;
   isYou: boolean;
+}
+
+function shortAddr(a: string): string {
+  return a.slice(0, 6) + "…" + a.slice(-4);
 }
 interface LeaderboardView {
   communalVault: number;
@@ -111,9 +118,28 @@ export default function Leaderboard({
             >
               <span className="lbrank">{r.rank}</span>
               <span className="lblabel">
-                {r.label}
+                {/* если ника нет, label уже равен короткому адресу — не дублируем,
+                    показываем только кликабельный адрес ниже */}
+                {!(r.address && r.label === shortAddr(r.address)) && r.label}
                 {r.isYou ? " (you)" : ""}
                 {r.kind === "bot" && <em className="botmark">test</em>}
+                {r.address &&
+                  (EXPLORER ? (
+                    <a
+                      className="addrlink"
+                      href={`${EXPLORER.replace(/\/$/, "")}/address/${r.address}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={r.address}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {shortAddr(r.address)} ↗
+                    </a>
+                  ) : (
+                    <em className="addrlink" title={r.address}>
+                      {shortAddr(r.address)}
+                    </em>
+                  ))}
               </span>
               <span className="lbstreak">×{r.streak}</span>
               <span className="lbstack">{fmt(r.stack)}</span>

@@ -1045,6 +1045,72 @@ body {
   text-align: center;
   padding: 10px 0;
 }
+.addrlink {
+  font-family: var(--read);
+  font-size: 13px;
+  font-style: normal;
+  color: var(--muted);
+  margin-left: 7px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.addrlink:hover,
+a.addrlink:focus-visible {
+  color: var(--neon);
+  text-decoration: underline;
+}
+
+/* ---- profile editor ---- */
+.nick-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.nick-input {
+  flex: 1;
+  min-width: 0;
+  background: #0d0904;
+  border: 3px solid var(--wood-darker);
+  color: var(--bone);
+  font-family: var(--read);
+  font-size: 18px;
+  padding: 8px 10px;
+}
+.nick-input:focus-visible {
+  outline: 3px solid var(--neon);
+  outline-offset: 1px;
+}
+.nick-input::placeholder {
+  color: var(--muted);
+}
+.nick-err {
+  margin-top: 7px;
+  font-size: 14px;
+  color: var(--rust-hi);
+}
+.hide-toggle {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  margin-top: 12px;
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--sand);
+}
+.hide-toggle input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: var(--neon-2);
+}
+.hide-toggle em {
+  display: block;
+  font-style: normal;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+}
 
 /* ───────────── modal ───────────── */
 .modal-back {

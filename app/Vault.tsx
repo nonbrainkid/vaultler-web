@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicView } from "@/lib/game";
 import ConnectButton from "./components/ConnectButton";
+import ProfileEditor from "./components/ProfileEditor";
 import SafeSprite from "./components/SafeSprite";
 import { RANK_SKINS, rankLevel, nextSkin } from "@/lib/skins";
 
@@ -12,6 +13,8 @@ interface StateResponse {
   view: PublicView;
   raid: { lost: number } | null;
   wallet?: string | null;
+  nickname?: string | null;
+  hideWallet?: boolean;
 }
 interface CrankResponse extends StateResponse {
   ok: boolean;
@@ -45,6 +48,8 @@ export default function Vault({
 }) {
   const [view, setView] = useState<PublicView | null>(null);
   const [wallet, setWallet] = useState<string | null>(null);
+  const [nickname, setNickname] = useState<string | null>(null);
+  const [hideWallet, setHideWallet] = useState(false);
   const [recvAt, setRecvAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
@@ -63,6 +68,8 @@ export default function Vault({
   const applyResponse = useCallback((data: StateResponse) => {
     setView(data.view);
     if (data.wallet !== undefined) setWallet(data.wallet);
+    if (data.nickname !== undefined) setNickname(data.nickname);
+    if (data.hideWallet !== undefined) setHideWallet(data.hideWallet);
     setRecvAt(Date.now());
     if (data.raid && data.raid.lost > 0) triggerFlash();
   }, []);
@@ -349,6 +356,14 @@ export default function Vault({
               </>
             )}
           </div>
+
+          {wallet && (
+            <ProfileEditor
+              nickname={nickname}
+              hideWallet={hideWallet}
+              onSaved={refetch}
+            />
+          )}
 
           <div className="card rules">
             <h3 className="card-h">THE RULES</h3>

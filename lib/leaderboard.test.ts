@@ -38,11 +38,44 @@ describe("buildLeaderboard", () => {
     expect(lb.players).toBe(3);
   });
 
-  it("приватность: кошелёк = короткий адрес, dev = anon", () => {
+  it("приватность: кошелёк = короткий адрес + полный адрес, dev = anon без адреса", () => {
     const lb = buildLeaderboard(snap, NOW, "dev:me");
     const wallet = lb.top.find((r) => r.kind === "wallet")!;
     expect(wallet.label).toMatch(/^0x.{4}….{4}$/);
-    expect(lb.top.filter((r) => r.kind === "anon").every((r) => r.label === "anon")).toBe(true);
+    expect(wallet.address).toMatch(/^0x[0-9a-fA-F]{40}$/); // адрес открыт по умолчанию
+    const anon = lb.top.find((r) => r.kind === "anon")!;
+    expect(anon.label).toBe("anon");
+    expect(anon.address).toBeNull();
+  });
+
+  it("ник кошелька показывается вместо адреса, но адрес всё равно доступен", () => {
+    const withNick: PlayerSnapshot[] = [
+      {
+        identity: "wallet:0xabc0000000000000000000000000000000000001",
+        state: { ...off(100), nickname: "SlimPete" },
+      },
+    ];
+    const lb = buildLeaderboard(withNick, NOW, "x");
+    expect(lb.top[0].label).toBe("SlimPete");
+    expect(lb.top[0].address).not.toBeNull(); // для explorer-ссылки
+  });
+
+  it("скрытый кошелёк не отдаёт адрес наружу", () => {
+    const hidden: PlayerSnapshot[] = [
+      {
+        identity: "wallet:0xabc0000000000000000000000000000000000002",
+        state: { ...off(100), nickname: "Ghost", hideWallet: true },
+      },
+      {
+        identity: "wallet:0xabc0000000000000000000000000000000000003",
+        state: { ...off(50), hideWallet: true }, // скрыт, без ника
+      },
+    ];
+    const lb = buildLeaderboard(hidden, NOW, "x");
+    expect(lb.top[0].label).toBe("Ghost");
+    expect(lb.top[0].address).toBeNull(); // адрес НЕ уходит
+    expect(lb.top[1].label).toBe("anon"); // скрыт без ника → anon
+    expect(lb.top[1].address).toBeNull();
   });
 
   it("отмечает «you» и отдаёт ранг игрока", () => {

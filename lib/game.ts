@@ -46,6 +46,10 @@ export interface PlayerState {
   machineOn: boolean;
   /** Активен ли буст за холд $VLTR (M1: всегда false). */
   boost: boolean;
+  /** Ник для лидерборда (уникальный, задаётся кошельком). null — не задан. */
+  nickname: string | null;
+  /** Скрыть адрес кошелька на борде. По умолчанию false — адрес открыт (прозрачность). */
+  hideWallet: boolean;
 }
 
 export interface RaidEvent {
@@ -184,6 +188,8 @@ export function initialState(now: number): PlayerState {
     lastSettleAt: now,
     machineOn: false,
     boost: false,
+    nickname: null,
+    hideWallet: false,
   };
 }
 

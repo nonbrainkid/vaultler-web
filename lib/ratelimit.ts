@@ -33,9 +33,12 @@ function slidingLimiter(limit: number, windowMs: number) {
   };
 }
 
-// Вход кошельком: строже кранка — это точка, куда бьют перебором подписей.
-export const allowAuth = slidingLimiter(12, 60_000); // 12 попыток/мин на ключ
-export const allowNonce = slidingLimiter(30, 60_000); // 30 nonce/мин на ключ
+// Вход кошельком. Подпись не брутфорсится (нужен приватник), лимит — анти-флуд.
+// 30/мин на IP: с запасом для легитимного юзера (nonce+verify+повторы), но режет спам.
+export const allowAuth = slidingLimiter(30, 60_000);
+export const allowNonce = slidingLimiter(40, 60_000);
+// Смена ника/приватности — свой бюджет, чтобы не конкурировал с логином.
+export const allowProfile = slidingLimiter(30, 60_000);
 
 /** Ключ клиента для rate-limit: первый IP из X-Forwarded-For (Vercel) либо fallback. */
 export function clientKey(req: Request): string {
