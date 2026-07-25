@@ -7,7 +7,6 @@ import {
   useDisconnect,
   useSignMessage,
   useSwitchChain,
-  useChainId,
 } from "wagmi";
 import { createSiweMessage } from "viem/siwe";
 import { SIWE_STATEMENT, SIWE_TTL_MS } from "@/lib/auth";
@@ -29,6 +28,55 @@ function errorMatches(e: unknown, test: (x: { name?: string; code?: number }) =>
     cur = cur.cause as typeof cur;
   }
   return false;
+}
+
+/** Подпись сорвалась в кошельке (не дошли до сервера). */
+class SignStepError extends Error {
+  constructor(readonly cause: unknown) {
+    super("sign step failed");
+  }
+}
+
+/** Сервер отверг вход и назвал причину кодом. */
+class VerifyRejected extends Error {
+  constructor(
+    readonly code: string,
+    readonly status: number,
+  ) {
+    super(`verify rejected: ${code || status}`);
+  }
+}
+
+/**
+ * Человеческий текст для провала входа. Общее «Sign-in failed» бесполезно: у входа
+ * два принципиально разных места отказа — кошелёк не отдал подпись и сервер её не принял,
+ * — и чинятся они по-разному. Сервер уже возвращает код причины, показываем его.
+ */
+function signInErrorText(e: unknown): string {
+  if (e instanceof VerifyRejected) {
+    switch (e.code) {
+      case "message_rejected":
+        return "The signed message didn't match this site (domain, nonce or expiry). Reload the page and try again.";
+      case "bad_signature":
+        return "Your wallet's signature didn't verify for this address. If you switched accounts, reconnect and retry.";
+      case "nonce_missing":
+        return "Sign-in code was lost — your browser is blocking our cookie. Disable tracking protection for this site and retry.";
+      case "bad_message":
+      case "bad_params":
+      case "bad_body":
+        return "The wallet returned a signature we couldn't read. Please report which wallet you used.";
+      case "rate_limited":
+        return "Too many attempts — wait a minute and try again.";
+      default:
+        return `Sign-in was rejected by the server (${e.code || e.status}).`;
+    }
+  }
+  if (e instanceof SignStepError) {
+    const name = (e.cause as { name?: string })?.name;
+    // Имя ошибки кошелька важнее общей фразы: по нему видно, что именно отказало.
+    return `Your wallet didn't return a signature${name ? ` (${name})` : ""}. Some wallets only sign on a supported network — try switching to a mainnet and retry.`;
+  }
+  return "Sign-in failed — try again.";
 }
 
 /** Имя коннектора для показа: generic-инжект wagmi зовётся "Injected" — это не для глаз. */
@@ -69,12 +117,14 @@ export default function ConnectButton({
   wallet: string | null;
   onChanged: () => void;
 }) {
-  const { address, isConnected } = useAccount();
+  // chainId берём ИМЕННО отсюда — это сеть кошелька. `useChainId()` отдаёт сеть
+  // из нашего конфига, а в нём один чейн, поэтому он всегда возвращал бы robinhoodChain.id
+  // независимо от того, где на самом деле стоит кошелёк.
+  const { address, isConnected, chainId: walletChainId } = useAccount();
   const { connectAsync, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
   const { switchChain } = useSwitchChain();
-  const chainId = useChainId();
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -82,7 +132,10 @@ export default function ConnectButton({
 
   const linked =
     !!wallet && !!address && wallet.toLowerCase() === address.toLowerCase();
-  const wrongChain = isConnected && chainId !== robinhoodChain.id;
+  // Сравниваем с сетью КОШЕЛЬКА. Раньше сравнивался chainId конфига сам с собой,
+  // поэтому кнопка WRONG NET не показывалась никогда.
+  const wrongChain =
+    isConnected && walletChainId !== undefined && walletChainId !== robinhoodChain.id;
 
   // Убираем дубликаты (EIP-6963 может отдать тот же кошелёк, что и явный таргет).
   const seen = new Set<string>();
@@ -126,23 +179,43 @@ export default function ConnectButton({
         statement: SIWE_STATEMENT,
         uri: window.location.origin,
         version: "1",
-        chainId: chainId || robinhoodChain.id,
+        // Сеть, на которой кошелёк РЕАЛЬНО стоит. Кошельки (в частности Phantom)
+        // разбирают EIP-4361 и сверяют Chain ID с активной сетью: при несовпадении
+        // они просто отказываются подписывать. Сервер сеть не пинит намеренно —
+        // для входа она не нужна, а переключить её предлагает кнопка WRONG NET.
+        chainId: walletChainId ?? robinhoodChain.id,
         nonce,
         issuedAt,
         expirationTime: new Date(issuedAt.getTime() + SIWE_TTL_MS),
       });
 
-      const signature = await signMessageAsync({ message });
+      let signature: `0x${string}`;
+      try {
+        signature = await signMessageAsync({ message });
+      } catch (e) {
+        // Ошибку подписи заворачиваем отдельно: иначе она неотличима от отказа сервера,
+        // а это совсем разные поломки (кошелёк vs наш бэкенд).
+        throw new SignStepError(e);
+      }
+
       const r = await fetch("/api/auth/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message, signature }),
       });
-      if (!r.ok) throw new Error("verify");
+      if (!r.ok) {
+        // Сервер называет причину отказа кодом — показываем её, а не общее «не вышло»:
+        // "домен не совпал" и "кошелёк не отдал подпись" чинятся по-разному.
+        const code = await r
+          .json()
+          .then((d: { error?: string }) => d?.error ?? "")
+          .catch(() => "");
+        throw new VerifyRejected(code, r.status);
+      }
       onChanged();
     } catch (e) {
       // Отказ подписи в кошельке — не ошибка, просто отмена.
-      setErr(isUserRejection(e) ? null : "Sign-in failed — try again.");
+      setErr(isUserRejection(e) ? null : signInErrorText(e));
     } finally {
       setBusy(false);
     }
