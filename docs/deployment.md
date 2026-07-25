@@ -45,6 +45,19 @@
 OG-картинке останется `http://localhost:3000`. Серверные (`SESSION_SECRET`, `DATABASE_URL`,
 `AUTH_DOMAIN`, `KV_*`) читаются в рантайме и подхватываются без пересборки.
 
+## Что уже развёрнуто (2026-07-25)
+
+| | |
+|---|---|
+| Проект Vercel | `nonbrainkid/thevaultler` (Hobby), автодеплой из `main` |
+| Основной домен | **https://thevaultler.fun** (DNS ведёт Vercel, сертификат выпущен) |
+| Старый адрес | `thevaultler.vercel.app` → 307 на основной домен |
+| Заданы | `SESSION_SECRET` (sensitive), `AUTH_DOMAIN=thevaultler.fun`, `NEXT_PUBLIC_SITE_URL=https://thevaultler.fun` |
+| Не заданы | `DATABASE_URL` (стор падает), `KV_*`, конфиг сети |
+
+Редирект со старого адреса не косметика: `AUTH_DOMAIN` пинит **один** хост, и вход
+кошельком на любом другом хосте отвечал бы ошибкой проверки подписи.
+
 ## Runbook: Vercel
 
 1. **Проект.** Vercel → Add New → Project → импортировать репозиторий. Framework
