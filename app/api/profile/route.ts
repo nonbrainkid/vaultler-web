@@ -2,8 +2,8 @@
  * POST /api/profile — задать ник и приватность адреса. Только для сессии с кошельком
  * (у анонимов личность = кука, легко сбросить → сквот ников). Ник уникален глобально.
  */
-import { NextRequest, NextResponse } from "next/server";
-import { resolveIdentity } from "@/lib/http";
+import { NextRequest } from "next/server";
+import { jsonNoStore, readJsonBody, resolveIdentity, sameOriginOk } from "@/lib/http";
 import { addressFromIdentity } from "@/lib/auth";
 import { validateNickname } from "@/lib/profile";
 import { getStore } from "@/lib/store";
@@ -15,22 +15,30 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  if (!(await allowProfile(clientKey(req), Date.now()))) {
-    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+  // Без этой проверки чужая страница могла бы молча переименовать игрока на борде
+  // или раскрыть его адрес, сняв hideWallet, — cookie браузер приложил бы сам.
+  if (!sameOriginOk(req)) {
+    return jsonNoStore({ error: "bad_origin" }, { status: 403 });
   }
 
   const identity = await resolveIdentity(req);
-  if (!addressFromIdentity(identity)) {
-    // анонимная сессия — ник нельзя (нужен подтверждённый кошелёк)
-    return NextResponse.json({ error: "wallet_required" }, { status: 403 });
+  if (!(await allowProfile(clientKey(req, identity), Date.now()))) {
+    return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
 
-  let body: { nickname?: unknown; hideWallet?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "bad_body" }, { status: 400 });
+  if (!addressFromIdentity(identity)) {
+    // анонимная сессия — ник нельзя (нужен подтверждённый кошелёк)
+    return jsonNoStore({ error: "wallet_required" }, { status: 403 });
   }
+
+  const parsedBody = await readJsonBody(req);
+  if (!parsedBody.ok) {
+    return jsonNoStore(
+      { error: parsedBody.error },
+      { status: parsedBody.error === "too_large" ? 413 : 400 },
+    );
+  }
+  const body = parsedBody.value as { nickname?: unknown; hideWallet?: unknown };
 
   const patch: ProfilePatch = {};
 
@@ -39,7 +47,7 @@ export async function POST(req: NextRequest) {
       patch.nickname = null; // очистить
     } else {
       const check = validateNickname(body.nickname);
-      if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
+      if (!check.ok) return jsonNoStore({ error: check.error }, { status: 400 });
       patch.nickname = check.value!;
     }
   }
@@ -48,7 +56,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (patch.nickname === undefined && patch.hideWallet === undefined) {
-    return NextResponse.json({ error: "nothing_to_update" }, { status: 400 });
+    return jsonNoStore({ error: "nothing_to_update" }, { status: 400 });
   }
 
   const now = Date.now();
@@ -56,10 +64,10 @@ export async function POST(req: NextRequest) {
   const result = await store.setProfile(identity, now, patch);
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 409 });
+    return jsonNoStore({ error: result.error }, { status: 409 });
   }
 
-  return NextResponse.json({
+  return jsonNoStore({
     ok: true,
     nickname: result.state.nickname,
     hideWallet: result.state.hideWallet,

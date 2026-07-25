@@ -99,6 +99,10 @@ export default function Vault({
     setBoostBusy(true);
     try {
       const r = await fetch("/api/boost/refresh", { method: "POST", cache: "no-store" });
+      // 429 — не сбой сети, а наш собственный интервал между чтениями баланса
+      // (сервер бережёт RPC). Красный баннер «нет связи» тут врал бы: связь есть,
+      // просто рановато. Оставляем экран как есть — кнопку можно нажать чуть позже.
+      if (r.status === 429) return;
       if (!r.ok) throw new Error("boost refresh failed");
       const d = (await r.json()) as StateResponse & { stale?: boolean };
       applyResponse(d);

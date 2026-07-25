@@ -13,6 +13,7 @@
     "db:studio": "prisma studio",
     "check:secrets": "node scripts/check-secrets.mjs",
     "test:auth": "node scripts/test-auth.mjs",
+    "test:profile": "node scripts/test-profile.mjs",
     "test:boost": "node scripts/test-boost.mjs"
   },
   "dependencies": {

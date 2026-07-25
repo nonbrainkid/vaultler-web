@@ -91,7 +91,13 @@ export function meetsBoostThreshold(
  * сбоя нельзя, а выдавать незаслуженно — тем более.
  */
 export async function computeBoost(address: string): Promise<boolean | null> {
-  if (process.env.DEV_FORCE_BOOST === "1") return true;
+  // Отладочный рубильник работает ТОЛЬКО вне прода. Случайно выставленная переменная
+  // в env Vercel раздала бы ×5 всем сразу — а множитель определяет, кто попадёт в топ-10
+  // и разделит призовой пул из реальных токенов. Такая ошибка не должна быть возможна
+  // в один клик по панели.
+  if (process.env.NODE_ENV !== "production" && process.env.DEV_FORCE_BOOST === "1") {
+    return true;
+  }
   // Токена/сети ещё нет — это не сбой, а достоверное «буста нет ни у кого».
   if (!VLTR_CONFIGURED) return false;
 

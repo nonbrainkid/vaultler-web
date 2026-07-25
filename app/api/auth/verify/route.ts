@@ -2,74 +2,130 @@
  * POST /api/auth/verify — проверить SIWE-подпись и сделать адрес идентичностью игрока.
  *
  * Что именно проверяется (EIP-4361):
- *  1) домен в подписанном сообщении == наш домен  → защита от фишинга/replay на чужом сайте;
+ *  1) домен в подписанном сообщении == наш ПРИПИНЕННЫЙ домен → защита от фишинга/релея;
  *  2) nonce == выданный нами одноразовый           → защита от повтора старой подписи;
- *  3) срок действия (expirationTime)               → пойманная подпись быстро протухает;
+ *  3) срок действия: expirationTime ОБЯЗАТЕЛЕН и не длиннее нашего окна;
  *  4) сама подпись валидна для адреса из сообщения  → доказательство владения кошельком.
  *
  * Мы НИЧЕГО не подписываем от имени юзера и не шлём транзакций — только читаем подпись
  * сообщения и публичный баланс $VLTR. Задрейнить через этот флоу нечего.
  */
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { verifyMessage, isAddress } from "viem";
 import { parseSiweMessage, validateSiweMessage } from "viem/siwe";
 import {
+  AuthDomainNotConfigured,
   NONCE_COOKIE,
+  SIWE_CLOCK_SKEW_MS,
+  SIWE_TTL_MS,
   expectedAuthDomain,
   walletIdentity,
 } from "@/lib/auth";
-import { SESSION_COOKIE, signedCookieValue } from "@/lib/session";
+import { SESSION_COOKIE, SESSION_TTL_MS, signedCookieValue } from "@/lib/session";
 import { computeBoost } from "@/lib/vltr";
 import { getStore } from "@/lib/store";
 import { settle, toPublicView } from "@/lib/game";
 import { allowAuth, clientKey } from "@/lib/ratelimit";
+import { jsonNoStore, readJsonBody, resolveIdentity, sameOriginOk } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_MESSAGE_LEN = 2000;
+/** Потолок для подписи: обычная — 132 символа, ERC-1271 длиннее, но не безразмерна. */
+const MAX_SIGNATURE_LEN = 4096;
 
 export async function POST(req: NextRequest) {
-  if (!(await allowAuth(clientKey(req), Date.now()))) {
-    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+  if (!sameOriginOk(req)) {
+    return jsonNoStore({ error: "bad_origin" }, { status: 403 });
   }
 
-  let body: { message?: string; signature?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "bad_body" }, { status: 400 });
+  if (!(await allowAuth(clientKey(req, await resolveIdentity(req)), Date.now()))) {
+    return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
-  const { message, signature } = body;
+
+  const parsedBody = await readJsonBody(req);
+  if (!parsedBody.ok) {
+    return jsonNoStore(
+      { error: parsedBody.error },
+      { status: parsedBody.error === "too_large" ? 413 : 400 },
+    );
+  }
+  const { message, signature } = parsedBody.value as {
+    message?: unknown;
+    signature?: unknown;
+  };
   if (
     typeof message !== "string" ||
     message.length > MAX_MESSAGE_LEN ||
     typeof signature !== "string" ||
+    signature.length > MAX_SIGNATURE_LEN ||
     !/^0x[0-9a-fA-F]+$/.test(signature)
   ) {
-    return NextResponse.json({ error: "bad_params" }, { status: 400 });
+    return jsonNoStore({ error: "bad_params" }, { status: 400 });
   }
 
   const nonce = req.cookies.get(NONCE_COOKIE)?.value;
   if (!nonce) {
-    return NextResponse.json({ error: "nonce_missing" }, { status: 400 });
+    return jsonNoStore({ error: "nonce_missing" }, { status: 400 });
+  }
+
+  // Домен пиним из env. Не задан в проде — это ошибка конфигурации, а не повод
+  // молча проверять подпись против заголовка Host, который присылает сам запрос.
+  let domain: string;
+  try {
+    domain = expectedAuthDomain(req.headers.get("host"));
+  } catch (e) {
+    if (e instanceof AuthDomainNotConfigured) {
+      console.error("[auth/verify]", e.message);
+      return jsonNoStore({ error: "server_misconfigured" }, { status: 500 });
+    }
+    throw e;
   }
 
   const parsed = parseSiweMessage(message);
   const address = parsed.address;
   if (!address || !isAddress(address)) {
-    return NextResponse.json({ error: "bad_message" }, { status: 400 });
+    return jsonNoStore({ error: "bad_message" }, { status: 400 });
+  }
+
+  const now = Date.now();
+
+  /**
+   * Срок жизни подписи проверяем сами, а не только через validateSiweMessage: тот
+   * сверяет expirationTime, ТОЛЬКО ЕСЛИ поле есть. Сообщение без него валидно вечно —
+   * одна утёкшая подпись пускала бы в аккаунт бессрочно. Требуем поле и держим окно
+   * коротким: пойманная подпись должна протухать за минуты, а не за годы.
+   */
+  const expiresAt = parsed.expirationTime?.getTime();
+  if (expiresAt === undefined || !Number.isFinite(expiresAt)) {
+    return jsonNoStore({ error: "message_rejected" }, { status: 401 });
+  }
+  if (expiresAt - now > SIWE_TTL_MS + SIWE_CLOCK_SKEW_MS) {
+    return jsonNoStore({ error: "message_rejected" }, { status: 401 });
+  }
+  // Версия EIP-4361 — часть контракта: чужая версия означает другой формат разбора.
+  if (parsed.version !== "1") {
+    return jsonNoStore({ error: "message_rejected" }, { status: 401 });
+  }
+  // uri обязан указывать на нас же: домен и адрес страницы не должны расходиться.
+  try {
+    if (!parsed.uri || new URL(parsed.uri).host !== domain) {
+      return jsonNoStore({ error: "message_rejected" }, { status: 401 });
+    }
+  } catch {
+    return jsonNoStore({ error: "message_rejected" }, { status: 401 });
   }
 
   // 1–3: поля сообщения (домен/nonce/срок)
   const fieldsOk = validateSiweMessage({
     message: parsed,
-    domain: expectedAuthDomain(req.headers.get("host")),
+    domain,
     nonce,
-    time: new Date(),
+    time: new Date(now),
   });
   if (!fieldsOk) {
-    return NextResponse.json({ error: "message_rejected" }, { status: 401 });
+    return jsonNoStore({ error: "message_rejected" }, { status: 401 });
   }
 
   // 4: подпись над сырым сообщением принадлежит адресу из сообщения
@@ -84,11 +140,10 @@ export async function POST(req: NextRequest) {
     sigOk = false;
   }
   if (!sigOk) {
-    return NextResponse.json({ error: "bad_signature" }, { status: 401 });
+    return jsonNoStore({ error: "bad_signature" }, { status: 401 });
   }
 
   const identity = walletIdentity(address);
-  const now = Date.now();
   const boost = await computeBoost(address); // серверное чтение on-chain
 
   const store = await getStore();
@@ -99,17 +154,19 @@ export async function POST(req: NextRequest) {
     return { state: r.state, result: r };
   });
 
-  const res = NextResponse.json({
+  // Наружу отдаём адрес, а не внутренний id (`wallet:0x…`): формат идентичности —
+  // деталь хранилища, и ей нечего делать в публичном контракте API.
+  const res = jsonNoStore({
     ok: true,
-    identity,
+    address: address.toLowerCase(),
     view: toPublicView(state, now),
   });
-  res.cookies.set(SESSION_COOKIE, await signedCookieValue(identity), {
+  res.cookies.set(SESSION_COOKIE, await signedCookieValue(identity, now), {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60 * 24 * 365,
+    maxAge: Math.floor(SESSION_TTL_MS / 1000),
   });
   res.cookies.set(NONCE_COOKIE, "", { path: "/", maxAge: 0 }); // одноразовый — гасим
   return res;

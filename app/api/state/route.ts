@@ -3,10 +3,10 @@
  * Read-only: settle считается в памяти только для отображения и НЕ персистится
  * (стек детерминирован из таймстемпов; запись происходит на кранке). Так поллинг дешёвый.
  */
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { settle, toPublicView } from "@/lib/game";
 import { getStore } from "@/lib/store";
-import { resolveIdentity } from "@/lib/http";
+import { jsonNoStore, resolveIdentity } from "@/lib/http";
 import { addressFromIdentity } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -20,7 +20,9 @@ export async function GET(req: NextRequest) {
   const stored = await store.read(identity, now);
   const settled = settle(stored, now); // только для отображения, без записи
 
-  return NextResponse.json({
+  // Ответ персональный (адрес кошелька, ник, настройка приватности) — в общий кэш ему
+  // нельзя ни при каких условиях.
+  return jsonNoStore({
     view: toPublicView(settled.state, now),
     raid: settled.raid, // если игрок как раз простоял окно — покажем рейд
     wallet: addressFromIdentity(identity), // адрес, если сессия привязана к кошельку

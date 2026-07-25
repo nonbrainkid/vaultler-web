@@ -19,6 +19,14 @@ import { getKv, kvConfig, type Kv } from "./kv";
 /** Минимальный интервал между кранками одного игрока. */
 const MIN_CRANK_INTERVAL_MS = 1000;
 
+/**
+ * Минимальный интервал между перечитываниями буста одним игроком.
+ * Каждый такой запрос — обращение к RPC от нашего имени: без интервала один вошедший
+ * игрок прокачивает через нас неограниченный поток к провайдеру (счёт + риск блокировки
+ * ключа, а с ним отваливается буст у всех). Баланс токена так часто не меняется.
+ */
+const MIN_BOOST_INTERVAL_MS = 10_000;
+
 /** Вход кошельком. Подпись не брутфорсится (нужен приватник), лимит — анти-флуд. */
 const AUTH_LIMIT = 30;
 const NONCE_LIMIT = 40;
@@ -61,6 +69,7 @@ function memoryWindow(limit: number, windowMs: number) {
 }
 
 const memCrank = memoryInterval(MIN_CRANK_INTERVAL_MS);
+const memBoost = memoryInterval(MIN_BOOST_INTERVAL_MS);
 const memAuth = memoryWindow(AUTH_LIMIT, WINDOW_MS);
 const memNonce = memoryWindow(NONCE_LIMIT, WINDOW_MS);
 const memProfile = memoryWindow(PROFILE_LIMIT, WINDOW_MS);
@@ -129,6 +138,20 @@ export function allowCrank(identity: string, now: number): Promise<boolean> {
   );
 }
 
+/** Не чаще одного перечитывания буста в 10 секунд на игрока (защита нашего RPC). */
+export function allowBoost(identity: string, now: number): Promise<boolean> {
+  return guard(
+    (kv) =>
+      kv.setIfAbsent(
+        `${PREFIX}:boost:${identity}`,
+        Math.ceil(MIN_BOOST_INTERVAL_MS / 1000),
+      ),
+    memBoost,
+    identity,
+    now,
+  );
+}
+
 export function allowAuth(key: string, now: number): Promise<boolean> {
   return guard(
     (kv) => kvWindow(kv, `${PREFIX}:auth:${key}`, AUTH_LIMIT, WINDOW_MS, now),
@@ -161,11 +184,71 @@ export function rateLimitBackend(): "shared" | "memory" {
   return kvConfig() ? "shared" : "memory";
 }
 
-/** Ключ клиента для rate-limit: первый IP из X-Forwarded-For (Vercel) либо fallback. */
-export function clientKey(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "unknown";
+/**
+ * Что показать в /api/health: есть ли под IP-лимитами доверенный источник.
+ * "session" означает, что IP считать неоткуда и лимит держится на cookie — на проде
+ * это сигнал, что перед приложением нет ожидаемого прокси.
+ */
+export function clientIpSource(req: Request): "trusted" | "session" {
+  return trustedIp(req) ? "trusted" : "session";
+}
+
+/**
+ * Разрешить доверять `X-Forwarded-For` — только для самохостинга за обратным прокси,
+ * который ПЕРЕЗАПИСЫВАЕТ (или дописывает справа) этот заголовок. На Vercel не нужно.
+ */
+const TRUST_XFF = process.env.TRUST_PROXY_XFF === "1";
+
+/**
+ * IP клиента из ДОВЕРЕННОГО источника; null — доверять нечему.
+ *
+ * Раньше ключом служил первый элемент `X-Forwarded-For`. Это чисто клиентское значение:
+ * его присылает сам запрос, и достаточно менять его в каждом запросе, чтобы каждый
+ * попадал в свой пустой счётчик. Лимитера фактически не существовало — проверено
+ * локально: 45 запросов при лимите 40/мин прошли все до одного.
+ *
+ * Поэтому доверяем только тому, что проставляет инфраструктура и что клиентский
+ * одноимённый заголовок гарантированно затирает:
+ *  1) `x-vercel-forwarded-for` — ставит платформа;
+ *  2) `x-real-ip` — платформа или nginx;
+ *  3) `x-forwarded-for` — ТОЛЬКО при явном TRUST_PROXY_XFF=1, и берётся последний
+ *     элемент: слева атакующий дописывает что угодно, справа значение подставляет
+ *     ближайший к нам доверенный прокси.
+ *
+ * Если ничего этого нет (локальная разработка, голый порт наружу) — возвращаем null.
+ * Это честнее, чем принять подделываемое значение и считать барьер работающим.
+ */
+export function trustedIp(req: Request): string | null {
+  const vercel = req.headers.get("x-vercel-forwarded-for")?.split(",")[0].trim();
+  if (vercel) return vercel;
+
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real) return real;
+
+  if (TRUST_XFF) {
+    const hops =
+      req.headers
+        .get("x-forwarded-for")
+        ?.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean) ?? [];
+    if (hops.length > 0) return hops[hops.length - 1];
+  }
+  return null;
+}
+
+/**
+ * Ключ клиента для rate-limit.
+ *
+ * Когда доверенного IP нет, ключуем по сессии, а не по общему ведру «unknown»:
+ * общее ведро означало бы, что один флудер выбирает лимит за всех сразу (отказ в
+ * обслуживании честным игрокам). Сессию атакующий, конечно, тоже может ротировать —
+ * но за IP-барьер на serverless в любом случае отвечает инфраструктура, а не мы.
+ */
+export function clientKey(req: Request, identity?: string): string {
+  const ip = trustedIp(req);
+  if (ip) return `ip:${ip}`;
+  return identity ? `sid:${identity}` : "unknown";
 }
 
 /** Только для тестов: внутренности фиксированного окна в Redis. */

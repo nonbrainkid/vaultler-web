@@ -116,18 +116,42 @@ describe("rateLimitBackend", () => {
   });
 });
 
-describe("clientKey", () => {
-  it("берёт первый IP из X-Forwarded-For (остальные подставляет прокси)", () => {
-    const req = new Request("https://x.test", {
-      headers: { "x-forwarded-for": "203.0.113.7, 70.41.3.18" },
-    });
-    expect(clientKey(req)).toBe("203.0.113.7");
+describe("clientKey — ключ берётся только из доверенного источника", () => {
+  const withHeaders = (headers: Record<string, string>, identity?: string) =>
+    clientKey(new Request("https://x.test", { headers }), identity);
+
+  /**
+   * Раньше ключом служил ПЕРВЫЙ элемент X-Forwarded-For, а его присылает сам клиент.
+   * Меняя его в каждом запросе, атакующий попадал в свежий пустой счётчик — лимитера
+   * фактически не было (проверено вживую: 45 запросов при лимите 40/мин прошли все).
+   */
+  it("клиентский X-Forwarded-For больше не влияет на ключ", () => {
+    const a = withHeaders({ "x-forwarded-for": "10.0.0.1" }, "dev:same");
+    const b = withHeaders({ "x-forwarded-for": "10.0.0.2" }, "dev:same");
+    expect(a).toBe(b); // подделка не даёт нового ведра
   });
 
-  it("фолбэк на x-real-ip, затем unknown", () => {
-    expect(clientKey(new Request("https://x.test", { headers: { "x-real-ip": "10.0.0.1" } }))).toBe(
-      "10.0.0.1",
+  it("подделка X-Forwarded-For не перебивает заголовок платформы", () => {
+    expect(
+      withHeaders({ "x-forwarded-for": "9.9.9.9", "x-vercel-forwarded-for": "203.0.113.7" }),
+    ).toBe("ip:203.0.113.7");
+  });
+
+  it("x-real-ip тоже доверенный источник", () => {
+    expect(withHeaders({ "x-forwarded-for": "9.9.9.9", "x-real-ip": "10.0.0.1" })).toBe(
+      "ip:10.0.0.1",
     );
-    expect(clientKey(new Request("https://x.test"))).toBe("unknown");
+  });
+
+  it("без доверенного IP ключуем по сессии, а не общим ведром на всех", () => {
+    // Общее ведро значило бы, что один флудер выбирает лимит за всех честных игроков.
+    expect(withHeaders({}, "wallet:0xabc")).toBe("sid:wallet:0xabc");
+    expect(withHeaders({})).toBe("unknown");
+  });
+
+  it("разные доверенные IP — разные вёдра", () => {
+    expect(withHeaders({ "x-real-ip": "10.0.0.1" })).not.toBe(
+      withHeaders({ "x-real-ip": "10.0.0.2" }),
+    );
   });
 });

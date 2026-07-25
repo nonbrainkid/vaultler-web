@@ -128,5 +128,66 @@ console.log("test address:", acct.address);
   check("подпись чужим ключом → 401", r.status === 401);
 }
 
+// 7) подпись без expirationTime → отказ.
+// viem проверяет срок, ТОЛЬКО если поле есть: сообщение без него валидно вечно,
+// и одна утёкшая подпись пускала бы в аккаунт бессрочно.
+{
+  const jar = {};
+  const nonce = await getNonce(jar);
+  const msg = siwe(acct, nonce, { expirationTime: undefined });
+  const sig = await acct.signMessage({ message: msg });
+  const r = await verify(jar, msg, sig);
+  check("подпись без срока действия → 401", r.status === 401);
+}
+
+// 8) подпись со сроком на месяц вперёд → отказ (окно должно быть коротким)
+{
+  const jar = {};
+  const nonce = await getNonce(jar);
+  const issuedAt = new Date();
+  const msg = siwe(acct, nonce, {
+    issuedAt,
+    expirationTime: new Date(issuedAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+  });
+  const sig = await acct.signMessage({ message: msg });
+  const r = await verify(jar, msg, sig);
+  check("срок действия сверх нашего окна → 401", r.status === 401);
+}
+
+// 9) вход с чужого origin → отказ (CSRF-слой поверх SameSite)
+{
+  const jar = {};
+  const nonce = await getNonce(jar);
+  const msg = siwe(acct, nonce);
+  const sig = await acct.signMessage({ message: msg });
+  const r = await fetch(`${BASE}/api/auth/verify`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      cookie: cookieHeader(jar),
+      origin: "https://evil-phishing.example",
+    },
+    body: JSON.stringify({ message: msg, signature: sig }),
+  });
+  check("POST с чужого origin → 403", r.status === 403);
+}
+
+// 10) захват чужого аккаунта заголовком идентичности → не проходит.
+// Заголовок x-vaultler-id ставит proxy, но роут проверяет его подпись сам: без
+// SESSION_SECRET подделать нельзя. Иначе один curl давал бы доступ к любому кошельку.
+{
+  const victim = "wallet:0x1111111111111111111111111111111111111111";
+  const r = await fetch(`${BASE}/api/state`, { headers: { "x-vaultler-id": victim } });
+  const s = await r.json();
+  check("подделка x-vaultler-id → чужая сессия не выдана", s.wallet === null);
+}
+
+// 11) персональные ответы не должны кэшироваться (Set-Cookie в общем кэше = чужой аккаунт)
+{
+  const r = await fetch(`${BASE}/api/state`);
+  const cc = r.headers.get("cache-control") ?? "";
+  check("на /api/state стоит no-store", cc.includes("no-store"));
+}
+
 console.log(`\n${failCount === 0 ? "✅" : "❌"} passed ${pass}, failed ${failCount}`);
 process.exit(failCount === 0 ? 0 : 1);

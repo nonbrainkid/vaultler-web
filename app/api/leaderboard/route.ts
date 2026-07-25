@@ -2,9 +2,9 @@
  * GET /api/leaderboard — недельный лидерборд + общий сейф.
  * Ранги и «общий сейф» считает сервер по живому стеку (settle каждому).
  */
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getStore } from "@/lib/store";
-import { resolveIdentity } from "@/lib/http";
+import { jsonNoStore, resolveIdentity } from "@/lib/http";
 import { buildLeaderboard } from "@/lib/leaderboard";
 
 export const runtime = "nodejs";
@@ -15,5 +15,6 @@ export async function GET(req: NextRequest) {
   const now = Date.now();
   const store = await getStore();
   const snapshot = await store.snapshot();
-  return NextResponse.json(buildLeaderboard(snapshot, now, identity, 10));
+  // Борд персонализирован (isYou, своя позиция) — общий кэш отдал бы чужую разметку.
+  return jsonNoStore(buildLeaderboard(snapshot, now, identity, 10));
 }

@@ -26,13 +26,43 @@ export const SIWE_STATEMENT_ALLOWED = /^[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;= ]+$/;
 export const SIWE_TTL_MS = 5 * 60 * 1000;
 
 /**
- * Ожидаемый домен для проверки SIWE-сообщения.
- * В проде пиним через AUTH_DOMAIN (Host-заголовок можно подделать); локально берём Host.
- * Домен в подписанном сообщении кошелёк показывает пользователю — если фишинг-сайт
- * подсунет свой домен, наш сервер отвергнет подпись (домен не сойдётся).
+ * Запас на расхождение часов клиента и сервера при проверке срока подписи.
+ * Без него честный вход с чуть спешащими часами отвергался бы как «из будущего».
  */
-export function expectedAuthDomain(hostHeader: string | null): string | undefined {
-  return process.env.AUTH_DOMAIN || hostHeader || undefined;
+export const SIWE_CLOCK_SKEW_MS = 2 * 60 * 1000;
+
+/** Ошибка конфигурации: домен для проверки SIWE не задан там, где он обязателен. */
+export class AuthDomainNotConfigured extends Error {
+  constructor() {
+    super(
+      "AUTH_DOMAIN не задан в production. Он пинит домен, по которому проверяется " +
+        "SIWE-подпись; без него домен берётся из подделываемого заголовка Host. " +
+        "Выставьте AUTH_DOMAIN в env (docs/deployment.md).",
+    );
+  }
+}
+
+/**
+ * Ожидаемый домен для проверки SIWE-сообщения.
+ *
+ * Домен в подписанном сообщении кошелёк показывает пользователю, и сервер обязан
+ * сверить его со СВОИМ доменом. Если брать домен из заголовка Host, проверка сверяет
+ * подпись с тем, что прислал сам запрос, — то есть не проверяет ничего: атакующий
+ * собирает у жертвы подпись для домена `evil.example`, а затем шлёт её нам с
+ * `Host: evil.example` и получает сессию от имени её кошелька.
+ *
+ * Поэтому в production AUTH_DOMAIN обязателен — падаем громко, а не тихо теряем
+ * защиту. Локально Host допустим: там нет ни реальных призов, ни чужих кошельков.
+ */
+export function expectedAuthDomain(hostHeader: string | null): string {
+  const pinned = process.env.AUTH_DOMAIN?.trim();
+  if (pinned) return pinned;
+
+  if (process.env.NODE_ENV === "production") throw new AuthDomainNotConfigured();
+
+  const host = hostHeader?.trim();
+  if (!host) throw new AuthDomainNotConfigured();
+  return host;
 }
 
 /** Идентичность игрока по адресу кошелька (нижний регистр = один аккаунт на кошелёк). */

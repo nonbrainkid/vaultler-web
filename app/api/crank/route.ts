@@ -3,10 +3,10 @@
  * settle → проверка фазы (winding отклоняется) → рост/сброс стрика → персист.
  * Клиент НЕ может ускорить время или начислить стек в обход этой логики.
  */
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { crank, phase, settle, toPublicView } from "@/lib/game";
 import { getStore } from "@/lib/store";
-import { resolveIdentity } from "@/lib/http";
+import { jsonNoStore, resolveIdentity, sameOriginOk } from "@/lib/http";
 import { allowCrank } from "@/lib/ratelimit";
 import { addressFromIdentity } from "@/lib/auth";
 import { computeBoost } from "@/lib/vltr";
@@ -15,11 +15,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  // Кранк меняет стейт и влияет на позицию в борде, который делит реальные токены:
+  // чужая страница не должна дёргать его за игрока (например, чтобы сбить ему тайминг).
+  if (!sameOriginOk(req)) {
+    return jsonNoStore({ error: "bad_origin" }, { status: 403 });
+  }
+
   const identity = await resolveIdentity(req);
   const now = Date.now();
 
   if (!(await allowCrank(identity, now))) {
-    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+    return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
 
   const store = await getStore();
@@ -67,7 +73,7 @@ export async function POST(req: NextRequest) {
         : null,
   );
 
-  return NextResponse.json({
+  return jsonNoStore({
     ok: result.ok,
     reason: result.reason ?? null,
     raid: result.raid,
