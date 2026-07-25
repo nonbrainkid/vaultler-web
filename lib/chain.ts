@@ -2,7 +2,7 @@
  * Конфиг сети Robinhood Chain (Arbitrum Orbit L2) и токена $VLTR.
  *
  * ВСЕ значения берутся из env — реальные RPC/chainId/адрес токена подставим позже
- * (см. NOTES.md, «доки Robinhood Chain отложены»). Пока — плейсхолдеры, чтобы весь
+ * (доки Robinhood Chain отложены, см. NOTES.md → открытые вопросы). Плейсхолдеры, чтобы весь
  * флоу кошелька собирался и тестировался off-chain (подпись сообщения сети не требует).
  */
 import { defineChain } from "viem";
@@ -28,7 +28,7 @@ export const robinhoodChain = defineChain({
 export const VLTR = {
   address: (process.env.NEXT_PUBLIC_VLTR_ADDRESS ?? "") as `0x${string}` | "",
   decimals: Number(process.env.NEXT_PUBLIC_VLTR_DECIMALS ?? "18"),
-  /** Минимум токенов на балансе для активации буста ×1.5. */
+  /** Минимум токенов на балансе для активации буста ×5 (GAME.BOOST_MULT). */
   boostMin: Number(process.env.NEXT_PUBLIC_VLTR_BOOST_MIN ?? "1"),
 };
 

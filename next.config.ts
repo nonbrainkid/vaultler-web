@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
-// Базовые security-заголовки. CSP пока не жёсткий (не ломаем инъектированный кошелёк
-// и RPC-соединения); строгий CSP с allowlist RPC/WalletConnect — в бэклоге (NOTES.md).
+// Базовые security-заголовки. Сам CSP живёт НЕ здесь, а в proxy.ts: он строгий и
+// требует per-request nonce, который статический конфиг выдать не может (docs/security.md).
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
