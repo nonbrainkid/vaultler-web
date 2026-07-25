@@ -111,8 +111,23 @@ git config core.hooksPath .githooks   # один раз: pre-push аудит с�
 - `serverExternalPackages: ["@prisma/client", ".prisma/client"]` в `next.config.ts` —
   чтобы Next не тащил нативный движок Prisma в бандл serverless-функции.
 - Импорт `FileStore` обёрнут в `NODE_ENV !== "production"` (`lib/store.ts`). Условие
-  статически вычислимо, поэтому в прод-сборке ветка вырезается вместе с `fs`/`path` —
-  это убрало build-варнинг Turbopack «whole project traced».
+  статически вычислимо, поэтому в прод-сборке ветка вырезается вместе с `fs`/`path`.
+- **Build-варнинг Turbopack «whole project traced» остаётся.** Источник — не файловый
+  стор (как считалось раньше), а сгенерированный клиент Prisma. Import trace:
+
+  ```
+  ./lib/generated/prisma/index.js → ./lib/store-prisma.ts → ./lib/store.ts → ./app/api/*/route.ts
+  ```
+
+  Клиент делает fs-операции, чтобы найти бинарь движка. `serverExternalPackages` его
+  не спасает: опция принимает **имена пакетов**, а `output` в `prisma/schema.prisma`
+  указывает на `lib/generated/prisma` — путь внутри проекта, не пакет в `node_modules`.
+  Next считает его обычным исходником, идёт по динамическим `require` и трассирует всё.
+
+  Последствие — раздутый бандл serverless-функции (медленнее холодный старт), не ошибка;
+  сборка и рантайм работают. Правильное лечение — вернуть генератор в `node_modules`,
+  чтобы сработало уже прописанное `serverExternalPackages: ["@prisma/client"]`. Трогает
+  слой данных, поэтому делать **после** запуска, а не перед.
 - `npm audit` показывает уязвимости в транзитивных `postcss`/`sharp` из Next 16;
   автофикс откатывает Next до 9.x (неприемлемо). Наш код не затронут.
 

@@ -17,6 +17,51 @@ export function shortAddr(a: string): string {
   return a.slice(0, 6) + "…" + a.slice(-4);
 }
 
+/**
+ * Кошелёк и wagmi оборачивают ошибки, поэтому ищем совпадение по всей цепочке `cause`.
+ * Сверяемся с `name`/`code`, а не с текстом: текст меняется между версиями библиотек
+ * и локализуется кошельком, а `name` — часть контракта ошибки.
+ */
+function errorMatches(e: unknown, test: (x: { name?: string; code?: number }) => boolean): boolean {
+  let cur = e as { name?: string; code?: number; cause?: unknown } | null | undefined;
+  for (let depth = 0; cur && depth < 5; depth++) {
+    if (test(cur)) return true;
+    cur = cur.cause as typeof cur;
+  }
+  return false;
+}
+
+/** Имя коннектора для показа: generic-инжект wagmi зовётся "Injected" — это не для глаз. */
+function prettyName(name: string): string {
+  return name === "Injected" ? "Browser Wallet" : name;
+}
+
+/** Отмена в кошельке — не ошибка: пользователь сам передумал, ругаться не за что. */
+function isUserRejection(e: unknown): boolean {
+  return errorMatches(e, (x) => x.name === "UserRejectedRequestError" || x.code === 4001);
+}
+
+/**
+ * Текст ошибки коннекта; null — показывать нечего.
+ * Отдельный случай «кошелька нет в браузере» принципиален: это самая частая причина
+ * неудачи, и без явного сообщения пользователь видит только, что ничего не произошло,
+ * и решает, что сломан сайт.
+ */
+function connectErrorText(e: unknown, connectorName: string): string | null {
+  if (isUserRejection(e)) return null;
+  const notInstalled = errorMatches(
+    e,
+    (x) => x.name === "ProviderNotFoundError" || x.name === "ConnectorNotFoundError",
+  );
+  if (notInstalled) {
+    // Generic-инжект — не продукт: «install Browser Wallet» звучало бы бессмыслицей.
+    return connectorName === "Injected"
+      ? "No browser wallet detected — install one, or open this page in your wallet's browser."
+      : `${connectorName} not detected — install it, or open this page in your wallet's browser.`;
+  }
+  return "Couldn't connect — try again.";
+}
+
 export default function ConnectButton({
   wallet,
   onChanged,
@@ -25,7 +70,7 @@ export default function ConnectButton({
   onChanged: () => void;
 }) {
   const { address, isConnected } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
+  const { connectAsync, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
   const { switchChain } = useSwitchChain();
@@ -53,10 +98,13 @@ export default function ConnectButton({
     if (!c) return;
     setErr(null);
     try {
-      await connect({ connector: c });
-      setOpen(false);
-    } catch {
-      setErr("connect failed");
+      // Именно connectAsync: обычный connect — fire-and-forget, он не реджектит промис
+      // (ошибка уходит в состояние хука). С ним `await` всегда проходил, модалка
+      // закрывалась даже при неудаче, а catch был мёртвым кодом.
+      await connectAsync({ connector: c });
+      setOpen(false); // закрываем только по факту успеха
+    } catch (e) {
+      setErr(connectErrorText(e, c.name));
     }
   }
 
@@ -93,9 +141,8 @@ export default function ConnectButton({
       if (!r.ok) throw new Error("verify");
       onChanged();
     } catch (e) {
-      // отказ подписи в кошельке — не ошибка, просто отмена
-      const msg = String((e as Error)?.message ?? "");
-      setErr(/reject|denied|User rejected/i.test(msg) ? null : "sign-in failed");
+      // Отказ подписи в кошельке — не ошибка, просто отмена.
+      setErr(isUserRejection(e) ? null : "Sign-in failed — try again.");
     } finally {
       setBusy(false);
     }
@@ -133,7 +180,7 @@ export default function ConnectButton({
                   disabled={isPending}
                   onClick={() => doConnect(c.uid)}
                 >
-                  {(c.name === "Injected" ? "Browser Wallet" : c.name).toUpperCase()}
+                  {prettyName(c.name).toUpperCase()}
                 </button>
               ))}
             </div>
