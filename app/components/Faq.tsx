@@ -32,8 +32,8 @@ const QA = [
     a: "Every stack, streak and timer is computed on the server against the server clock. The browser only draws what the server says. Cranking early, editing local values or spamming the endpoint does not work.",
   },
   {
-    q: "When is the token launching?",
-    a: "Not announced yet. It will be a fair launch through a launchpad: no presale, no team allocation, no treasury, liquidity locked automatically. Announcements go out on X first — ignore any other source.",
+    q: "Is the token live, and how do I buy it safely?",
+    a: "It is live: a fair launch through a launchpad, with no presale, no team allocation and no treasury. Use the BUY button in the $VLTR section — and before you confirm anything, compare the contract address shown there character by character with what your wallet is about to trade. Any other address, link or DM claiming to be us is a scam, no matter how convincing it looks. We announce on X and Telegram only.",
   },
 ];
 

@@ -1,4 +1,5 @@
 import Socials from "./Socials";
+import { BUY_URL } from "@/lib/links";
 
 export default function Hero() {
   return (
@@ -21,10 +22,14 @@ export default function Hero() {
             <a className="btn btn-neon lg" href="#game">
               PLAY THE GAME
             </a>
-            <button className="btn btn-gold lg is-stub" disabled title="fair launch — soon">
+            <a
+              className="btn btn-gold lg"
+              href={BUY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               BUY $VLTR
-              <span className="stub-tag">soon</span>
-            </button>
+            </a>
           </div>
 
           <Socials size="sm" />

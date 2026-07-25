@@ -562,6 +562,12 @@ body {
   word-break: break-all;
   user-select: all;
 }
+.ca-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
 .ca-note {
   margin-top: 9px;
   font-size: 13px;

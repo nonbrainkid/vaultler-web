@@ -18,9 +18,9 @@ const STATUS = [
   { s: "live", t: "Server-side scoring", d: "Stacks, streaks and anti-cheat are running." },
   { s: "live", t: "Weekly leaderboard", d: "Live ranking and community vault." },
   {
-    s: "wip",
+    s: "live",
     t: "$VLTR token",
-    d: "Contract is deployed — address is in the $VLTR section above. Trading opens at fair launch via launchpad.",
+    d: "Launched and trading. Verify the contract address in the $VLTR section above before you buy anything.",
   },
   {
     s: "wip",

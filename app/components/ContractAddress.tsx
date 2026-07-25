@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { VLTR_ADDRESS, robinhoodChain } from "@/lib/chain";
+import { BUY_URL, linkByKey } from "@/lib/links";
 
 /**
  * Адрес контракта $VLTR с кнопкой копирования.
@@ -24,6 +25,7 @@ export default function ContractAddress() {
   if (!VLTR_ADDRESS) return null;
 
   const explorer = robinhoodChain.blockExplorers?.default.url;
+  const dex = linkByKey("dex");
 
   const flash = (next: "ok" | "fail") => {
     setState(next);
@@ -76,6 +78,24 @@ export default function ContractAddress() {
             rel="noopener noreferrer"
           >
             EXPLORER
+          </a>
+        )}
+      </div>
+
+      {/* Кнопки «купить» и «график» стоят рядом с проверяемым адресом намеренно: человек
+          действует именно здесь, и здесь же может сверить контракт. */}
+      <div className="ca-actions">
+        <a className="btn btn-gold sm" href={BUY_URL} target="_blank" rel="noopener noreferrer">
+          BUY $VLTR
+        </a>
+        {dex?.href && (
+          <a
+            className="btn btn-wood sm"
+            href={dex.href}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            CHART
           </a>
         )}
       </div>

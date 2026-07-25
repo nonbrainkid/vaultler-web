@@ -45,8 +45,8 @@ export default function TokenSection() {
           <article className="card">
             <h3 className="card-h neon">FAIR LAUNCH</h3>
             <p>
-              Launching via a fair-launch launchpad. <b>No team allocation, no presale, no
-              treasury</b> — the whole supply goes on the curve and LP is locked
+              Launched via a fair-launch launchpad. <b>No team allocation, no presale, no
+              treasury</b> — the whole supply went on the curve and LP is locked
               automatically. We buy like everyone else.
             </p>
           </article>
