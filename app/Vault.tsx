@@ -53,6 +53,9 @@ export default function Vault({
   const [recvAt, setRecvAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
+  const [boostBusy, setBoostBusy] = useState(false);
+  /** Баланс прочитать не удалось — показываем последнее известное значение как неточное. */
+  const [boostStale, setBoostStale] = useState(false);
   const [netErr, setNetErr] = useState(false);
   const flashRef = useRef<HTMLDivElement>(null);
   const chamberRef = useRef<HTMLDivElement>(null);
@@ -85,6 +88,28 @@ export default function Vault({
       setNetErr(true);
     }
   }, [applyResponse]);
+
+  /**
+   * Перечитать баланс $VLTR прямо сейчас. Нужен потому, что буст фиксируется на кранке:
+   * купив токен сразу после завода, игрок иначе не увидел бы ×5 до следующего кранка
+   * и решил бы, что буст не работает.
+   */
+  const recheckBoost = useCallback(async () => {
+    if (boostBusy) return;
+    setBoostBusy(true);
+    try {
+      const r = await fetch("/api/boost/refresh", { method: "POST", cache: "no-store" });
+      if (!r.ok) throw new Error("boost refresh failed");
+      const d = (await r.json()) as StateResponse & { stale?: boolean };
+      applyResponse(d);
+      setBoostStale(Boolean(d.stale));
+      setNetErr(false);
+    } catch {
+      setNetErr(true);
+    } finally {
+      setBoostBusy(false);
+    }
+  }, [boostBusy, applyResponse]);
 
   const doCrank = useCallback(async () => {
     if (busy) return;
@@ -337,10 +362,24 @@ export default function Vault({
                   <span className={"bpill" + (view?.boost ? " on" : "")}>
                     {view?.boost ? "×5 ACTIVE" : "not holding $VLTR"}
                   </span>
+                  <button
+                    className="btn btn-ghost sm"
+                    disabled={boostBusy}
+                    onClick={recheckBoost}
+                    title="re-read your $VLTR balance on-chain"
+                  >
+                    {boostBusy ? "…" : "RE-CHECK"}
+                  </button>
                 </p>
+                {boostStale && (
+                  <p className="muted-note warn">
+                    Couldn&apos;t reach the network just now — showing the last confirmed
+                    result. Your boost was not changed.
+                  </p>
+                )}
                 <p className="muted-note">
                   Wallet linked. We read your $VLTR balance on-chain — nothing is deposited
-                  or locked.
+                  or locked. The boost is locked in when you crank, so hold before you wind.
                 </p>
               </>
             ) : (

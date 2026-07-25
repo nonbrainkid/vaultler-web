@@ -24,13 +24,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ boost: false, view: toPublicView(settle(stored, now).state, now) });
   }
 
-  const boost = await computeBoost(address);
+  // null — RPC не ответил. Прежний буст СОХРАНЯЕМ: снимать ×5 у холдера из-за сетевого
+  // сбоя нельзя (а выдавать незаслуженно — тем более).
+  const fresh = await computeBoost(address);
   const store = await getStore();
   const { state } = await store.mutate(identity, now, (s) => {
     const r = settle(s, now);
-    r.state.boost = boost;
+    if (fresh !== null) r.state.boost = fresh;
     return { state: r.state, result: r };
   });
 
-  return NextResponse.json({ boost, view: toPublicView(state, now) });
+  return NextResponse.json({
+    boost: state.boost,
+    // Честно сообщаем клиенту, что значение не подтверждено: UI не должен показывать
+    // «не холдит», когда мы просто не смогли посмотреть.
+    stale: fresh === null,
+    view: toPublicView(state, now),
+  });
 }

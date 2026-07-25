@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    // ES2020 — минимум для bigint-литералов. Код на них завязан: Prisma отдаёт BigInt
+    // для времени, порог буста сравнивается в bigint (lib/vltr.ts). При noEmit target
+    // влияет только на проверку типов — эмитом занимается SWC по своему browserslist.
+    "target": "ES2020",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,

@@ -92,6 +92,57 @@ describe("кранк", () => {
   });
 });
 
+// Буст даёт ×5 к начислению, поэтому важно КОГДА он применяется.
+describe("буст на кранке", () => {
+  it("успешный кранк ставит свежий буст", () => {
+    const r = crank(fresh(), T0, true);
+    expect(r.state.boost).toBe(true);
+  });
+
+  it("снимает буст, если игрок больше не холдит", () => {
+    const held = crank(fresh(), T0, true).state;
+    const after = crank(held, T0 + GAME.WIND_MS + HOUR, false);
+    expect(after.state.boost).toBe(false);
+  });
+
+  it("null (RPC не ответил) оставляет прежний буст, а не снимает его", () => {
+    const held = crank(fresh(), T0, true).state;
+    const after = crank(held, T0 + GAME.WIND_MS + HOUR, null);
+    expect(after.state.boost).toBe(true);
+  });
+
+  it("undefined (не проверяли) тоже не трогает буст", () => {
+    const held = crank(fresh(), T0, true).state;
+    expect(crank(held, T0 + GAME.WIND_MS + HOUR).state.boost).toBe(true);
+  });
+
+  it("отклонённый кранк буст не меняет — ставка завода уже зафиксирована", () => {
+    const held = crank(fresh(), T0, true).state;
+    const rejected = crank(held, T0 + HOUR, false); // ещё winding
+    expect(rejected.ok).toBe(false);
+    expect(rejected.state.boost).toBe(true);
+  });
+
+  /**
+   * Ключевой инвариант: буст задаёт ставку СЛЕДУЮЩЕГО завода. Если применить его до
+   * settle, уже отработавший отрезок пересчитается по новому множителю задним числом —
+   * игрок получил бы ×5 за сутки, которые стакал без токена (или наоборот потерял бы).
+   */
+  it("не пересчитывает задним числом уже начисленный отрезок", () => {
+    const noBoost = crank(fresh(), T0, false).state;
+    const readyAt = T0 + GAME.WIND_MS + HOUR; // полный завод без буста
+
+    const withNewBoost = crank(noBoost, readyAt, true);
+    const withoutBoost = crank(noBoost, readyAt, false);
+
+    // Стек за прошедший завод одинаков: включение буста прошлое не трогает.
+    expect(withNewBoost.state.stack).toBeCloseTo(withoutBoost.state.stack, 9);
+    // А ставка на следующий завод уже разная.
+    expect(withNewBoost.state.boost).toBe(true);
+    expect(withoutBoost.state.boost).toBe(false);
+  });
+});
+
 // phaseAt уходит в журнал CrankLog — по нему потом разбирают спорные ситуации.
 describe("фаза на момент попытки (для аудита)", () => {
   it("первый кранк застаёт машину выключенной", () => {

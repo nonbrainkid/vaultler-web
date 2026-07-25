@@ -27,9 +27,15 @@ export const robinhoodChain = defineChain({
 
 export const VLTR = {
   address: (process.env.NEXT_PUBLIC_VLTR_ADDRESS ?? "") as `0x${string}` | "",
+  /** Фолбэк decimals. Основной источник — сам контракт (см. lib/vltr.ts). */
   decimals: Number(process.env.NEXT_PUBLIC_VLTR_DECIMALS ?? "18"),
-  /** Минимум токенов на балансе для активации буста ×5 (GAME.BOOST_MULT). */
-  boostMin: Number(process.env.NEXT_PUBLIC_VLTR_BOOST_MIN ?? "1"),
+  /**
+   * Минимум токенов на балансе для активации буста ×5 (GAME.BOOST_MULT).
+   * Держим СТРОКОЙ: порог переводится в единицы токена через `parseUnits`, а число
+   * по пути в строку и обратно теряет точность и на больших значениях уезжает
+   * в экспоненциальную запись, которую `parseUnits` не примет.
+   */
+  boostMin: process.env.NEXT_PUBLIC_VLTR_BOOST_MIN?.trim() || "1",
 };
 
 export const RPC_CONFIGURED = RPC_URL.length > 0;

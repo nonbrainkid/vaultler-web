@@ -162,14 +162,29 @@ export interface CrankResult {
  * Выполнить кранк. Сначала settle (докидываем стек / разрешаем рейд),
  * затем валидируем фазу и заводим машину.
  * Во время завода (winding) кранк ОТКЛОНЯЕТСЯ — нельзя ускорить время.
+ *
+ * `nextBoost` — свежепрочитанный on-chain буст на предстоящий завод.
+ * `undefined`/`null` означают «не проверяли / не смогли прочитать» → оставляем как было
+ * (сетевой сбой не должен снимать ×5 у холдера).
  */
-export function crank(prev: PlayerState, now: number): CrankResult {
+export function crank(
+  prev: PlayerState,
+  now: number,
+  nextBoost?: boolean | null,
+): CrankResult {
   const settled = settle(prev, now);
   const state = settled.state;
   const p = phase(state, now);
 
   if (p === "winding") {
+    // Кранк отклонён — ставка текущего завода уже зафиксирована, буст не трогаем.
     return { ok: false, reason: "winding", phaseAt: p, state, raid: settled.raid };
+  }
+
+  // Буст применяем СТРОГО после settle: он задаёт ставку на следующий завод и не должен
+  // задним числом пересчитывать уже начисленный отрезок по новому множителю.
+  if (nextBoost !== undefined && nextBoost !== null) {
+    state.boost = nextBoost;
   }
 
   if (p === "ready") {

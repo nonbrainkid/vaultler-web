@@ -94,7 +94,8 @@ export async function POST(req: NextRequest) {
   const store = await getStore();
   const { state } = await store.mutate(identity, now, (s) => {
     const r = settle(s, now);
-    r.state.boost = boost;
+    // null — RPC не ответил: оставляем прежнее значение, а не снимаем буст.
+    if (boost !== null) r.state.boost = boost;
     return { state: r.state, result: r };
   });
 

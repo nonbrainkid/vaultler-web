@@ -586,8 +586,16 @@ body {
 .muted-note b {
   color: var(--neon);
 }
+.muted-note.warn {
+  color: var(--rust-hi);
+}
 .boost-state {
   margin-bottom: 8px;
+  /* Пилюля статуса и кнопка RE-CHECK в одной строке; на узком экране кнопка переносится. */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .boost-connect {
   margin-top: 12px;
