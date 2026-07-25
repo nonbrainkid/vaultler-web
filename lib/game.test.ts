@@ -20,6 +20,7 @@ import {
   initialState,
   type PlayerState,
 } from "./game";
+import { weekInfo } from "./week";
 
 // Тесты в реальных (прод) таймингах, т.к. GAME_MODE не выставлен в тест-окружении.
 const T0 = 1_700_000_000_000; // фиксированный "сейчас" для детерминизма
@@ -276,6 +277,81 @@ describe("тир холда на кранке", () => {
     for (let i = 1; i < stacks.length; i++) {
       expect(stacks[i]).toBeGreaterThan(stacks[i - 1]);
     }
+  });
+});
+
+/**
+ * Недельный борд: ранг считается по ПРИРОСТУ за неделю (`stack - weekStartStack`),
+ * а личный стек и тиры не сбрасываются. Здесь проверяется, что база берётся ровно
+ * на границе недели — от этого зависит, кто попадёт в топ-10 и получит реальные токены.
+ */
+describe("база недели", () => {
+  const week = weekInfo(T0);
+
+  it("у нового игрока неделя текущая, а весь стек засчитан в неё", () => {
+    const s = crank(fresh(), T0).state;
+    const after = settle(s, T0 + 60_000).state;
+    expect(after.weekId).toBe(week.weekId);
+    expect(after.weekStartStack).toBe(0);
+    expect(toPublicView(after, T0 + 60_000).weekStack).toBeCloseTo(after.stack);
+  });
+
+  /**
+   * Ключевой случай: машина заведена ДО субботы и продолжает капать после неё.
+   * База должна быть стеком ровно на полуночь, иначе часть прошлой недели уехала бы
+   * в зачёт новой (или наоборот пропала).
+   */
+  it("машина, работающая через границу, делит стек по полуночи", () => {
+    const crankAt = week.startsAt - 12 * HOUR; // за 12ч до сброса
+    const started = crank(initialState(crankAt), crankAt).state;
+
+    const sixHoursIn = week.startsAt + 6 * HOUR;
+    const after = settle(started, sixHoursIn).state;
+
+    const rate = ratePerSec(1, 0);
+    // до границы накапало ровно 12 часов
+    expect(after.weekStartStack).toBeCloseTo(rate * 12 * 3600, 6);
+    // после границы — ровно 6 часов
+    expect(after.stack - after.weekStartStack).toBeCloseTo(rate * 6 * 3600, 6);
+    expect(after.weekId).toBe(weekInfo(sixHoursIn).weekId);
+  });
+
+  it("личный стек и тиры сброс не трогает", () => {
+    const crankAt = week.startsAt - 20 * HOUR;
+    let s = crank(initialState(crankAt), crankAt).state;
+    s = { ...s, stack: 5000 }; // как будто игрок давно копит
+    const after = settle(s, week.startsAt + HOUR).state;
+    expect(after.stack).toBeGreaterThanOrEqual(5000); // накопленное на месте
+    expect(tierIndex(after.stack)).toBeGreaterThan(0); // тир не потерян
+  });
+
+  it("повторный settle не сдвигает базу (идемпотентность сохранена)", () => {
+    const crankAt = week.startsAt - 3 * HOUR;
+    const started = crank(initialState(crankAt), crankAt).state;
+    const t = week.startsAt + 2 * HOUR;
+    const once = settle(started, t).state;
+    const twice = settle(once, t).state;
+    expect(twice.weekStartStack).toBeCloseTo(once.weekStartStack, 9);
+    expect(twice.stack).toBeCloseTo(once.stack, 9);
+  });
+
+  it("игрок, пропустивший несколько недель, стартует с базой текущей недели", () => {
+    const crankAt = week.startsAt - 30 * 24 * HOUR; // месяц назад
+    const started = crank(initialState(crankAt), crankAt).state;
+    const after = settle(started, week.startsAt + HOUR).state;
+    expect(after.weekId).toBe(week.weekId);
+    // за этот месяц был рейд и машина заглохла — прирост за новую неделю нулевой
+    expect(after.stack - after.weekStartStack).toBeCloseTo(0, 9);
+  });
+
+  it("рейд через границу применяется один раз", () => {
+    const crankAt = week.startsAt - (GAME.WIND_MS + GAME.GRACE_MS) - HOUR;
+    const started = crank(initialState(crankAt), crankAt).state;
+    const r = settle(started, week.startsAt + HOUR);
+    expect(r.raid).not.toBeNull();
+    expect(r.state.machineOn).toBe(false);
+    // второй settle того же момента рейд не повторяет
+    expect(settle(r.state, week.startsAt + HOUR).raid).toBeNull();
   });
 });
 

@@ -8,6 +8,8 @@
  * источник правды», docs/game-mechanics.md — формулы и фазы).
  */
 
+import { weekInfo } from "./week";
+
 // ---- Конфиг таймингов и экономики ----
 // Демо-режим (GAME_MODE=demo) повторяет прототип: быстрый цикл для тестов петли.
 // В проде переменная не выставлена → реальные 24ч/12ч.
@@ -164,6 +166,17 @@ export interface PlayerState {
   boostTier: number;
   /** Доля от эмиссии (ppb) на момент последнего успешного чтения — обоснование тира. */
   boostPpb: number;
+  /**
+   * Неделя борда, к которой относится база `weekStartStack` (см. lib/week.ts).
+   * Ставит сервер: клиент это значение не передаёт никогда.
+   */
+  weekId: number;
+  /**
+   * Стек на момент начала недели. Ранг в борде считается как `stack - weekStartStack`,
+   * то есть по ПРИРОСТУ за неделю. Личный стек при этом продолжает расти — от него
+   * зависят тиры и скины, и обнулять их каждую субботу значило бы наказывать за стаж.
+   */
+  weekStartStack: number;
   /** Ник для лидерборда (уникальный, задаётся кошельком). null — не задан. */
   nickname: string | null;
   /** Скрыть адрес кошелька на борде. По умолчанию false — адрес открыт (прозрачность). */
@@ -234,9 +247,46 @@ export function phase(state: PlayerState, now: number): Phase {
 /**
  * Начислить офлайн-стек и, если машина простояла окно, применить рейд.
  * Идемпотентно относительно `lastSettleAt`: повторный вызов с тем же `now` ничего не добавит.
+ *
+ * Помимо начисления, здесь же фиксируется база недели (`weekStartStack`) — см. `rebase`.
+ * Это сделано внутри `settle`, а не в роутах, специально: `settle` вызывают все пути
+ * (кранк, чтение стейта, борд, обновление буста), и ни один из них не может «забыть»
+ * перевести игрока на новую неделю.
  */
 export function settle(prev: PlayerState, now: number): SettleResult {
+  const wk = weekInfo(now);
+  let state: PlayerState = { ...prev };
+  let accrued = 0;
+  let raid: RaidEvent | null = null;
+
+  if (state.weekId !== wk.weekId) {
+    // Докручиваем ровно до субботней полуночи, чтобы база была стеком НА МОМЕНТ границы,
+    // а не тем, что накапало уже на новой неделе. Иначе игрок, у которого машина
+    // работала через границу, унёс бы часть прошлой недели в зачёт новой.
+    // Условие про lastSettleAt: назад время не двигаем (это сломало бы идемпотентность);
+    // если стейт уже посчитан за границу, берём текущий стек — в пользу борда, не игрока.
+    if (wk.startsAt > state.lastSettleAt) {
+      const toBoundary = advance(state, wk.startsAt);
+      state = toBoundary.state;
+      accrued += toBoundary.accrued;
+      raid = toBoundary.raid ?? raid;
+    }
+    state.weekId = wk.weekId;
+    state.weekStartStack = state.stack;
+  }
+
+  const rest = advance(state, now);
+  state = rest.state;
+  accrued += rest.accrued;
+  raid = rest.raid ?? raid;
+
+  return { state, accrued, raid };
+}
+
+/** Начисление и рейд до момента `to`. Без недельной логики — её добавляет `settle`. */
+function advance(prev: PlayerState, to: number): SettleResult {
   const state: PlayerState = { ...prev };
+  const now = to;
   let accrued = 0;
   let raid: RaidEvent | null = null;
 
@@ -335,6 +385,8 @@ export function initialState(now: number): PlayerState {
     machineOn: false,
     boostTier: 0,
     boostPpb: 0,
+    weekId: weekInfo(now).weekId,
+    weekStartStack: 0,
     nickname: null,
     hideWallet: false,
   };
@@ -372,6 +424,10 @@ export function hydrateState(raw: unknown, now: number): PlayerState {
     machineOn: r.machineOn === true,
     boostTier: tier,
     boostPpb: clampSharePpb(r.boostPpb),
+    // Записи без недели (старый формат) получают weekId 0 — он заведомо не совпадёт
+    // с текущим, и первый же settle честно зафиксирует базу.
+    weekId: num(r.weekId, 0),
+    weekStartStack: Math.max(0, num(r.weekStartStack, 0)),
     nickname: typeof r.nickname === "string" ? r.nickname : null,
     hideWallet: r.hideWallet === true,
   };
@@ -411,6 +467,8 @@ export interface PublicView {
   nextHolder: HolderTierView | null;
   /** Своя доля от эмиссии в процентах на момент последнего чтения чейна. */
   holderSharePct: number;
+  /** Стек, набранный за текущую неделю борда — именно он определяет место в топ-10. */
+  weekStack: number;
   serverNow: number;
 }
 
@@ -462,6 +520,7 @@ export function toPublicView(state: PlayerState, now: number): PublicView {
     holder: toHolderView(holderTier(level)),
     nextHolder: nextTier ? toHolderView(nextTier) : null,
     holderSharePct: sharePctFromPpb(state.boostPpb),
+    weekStack: Math.max(0, state.stack - state.weekStartStack),
     serverNow: now,
   };
 }

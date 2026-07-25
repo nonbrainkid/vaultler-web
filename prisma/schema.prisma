@@ -27,6 +27,10 @@ model Player {
   // и чтобы при разборе спора было видно, ПОЧЕМУ выдан именно этот множитель.
   boostTier    Int      @default(0)
   boostPpb     Int      @default(0)
+  // Недельный борд: ранг считается по приросту `stack - weekStartStack`, а не по
+  // накопленному стеку. Личный стек и тиры при этом не сбрасываются.
+  weekId         Int   @default(0)
+  weekStartStack Float @default(0)
   // Ник для лидерборда: nickname — как показывать, nicknameKey — lowercase для уникальности.
   nickname     String?
   nicknameKey  String?  @unique

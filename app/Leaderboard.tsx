@@ -90,7 +90,9 @@ export default function Leaderboard({
         paid in real tokens. Resets <b>Saturday 00:00 New York</b>, in{" "}
         <b>{lb ? fmtWeek(lb.week.endsInMs) : "—"}</b> · <b>{lb?.players ?? 0}</b> stackers
       </div>
-      <div className="paidzone">▸ ranks 1–10 are in the money</div>
+      <div className="paidzone">
+        ▸ ranks 1–10 are in the money · ranked by $STACK earned <b>this week</b>
+      </div>
 
       {failed && (
         <p className="lb-err" role="alert">

@@ -28,6 +28,8 @@ type Row = {
   machineOn: boolean;
   boostTier: number;
   boostPpb: number;
+  weekId: number;
+  weekStartStack: number;
   nickname: string | null;
   hideWallet: boolean;
 };
@@ -43,6 +45,8 @@ function toState(row: Row): PlayerState {
     // множитель, и трактовать его надо как «буста нет», а не как максимальный.
     boostTier: clampHolderLevel(row.boostTier),
     boostPpb: Math.max(0, Number(row.boostPpb) || 0),
+    weekId: Number(row.weekId) || 0,
+    weekStartStack: Math.max(0, Number(row.weekStartStack) || 0),
     nickname: row.nickname ?? null,
     hideWallet: row.hideWallet ?? false,
   };
@@ -58,6 +62,8 @@ function toWrite(s: PlayerState) {
     boostTier: s.boostTier,
     // ppb — целое (Int в схеме): доля ≤ 1e9, дробные доли ppb на пороги не влияют.
     boostPpb: Math.round(s.boostPpb),
+    weekId: s.weekId,
+    weekStartStack: s.weekStartStack,
     nickname: s.nickname,
     nicknameKey: s.nickname ? nicknameKey(s.nickname) : null,
     hideWallet: s.hideWallet,
