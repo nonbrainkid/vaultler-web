@@ -2,9 +2,25 @@
 
 export const NONCE_COOKIE = "vaultler_nonce";
 
-/** Текст, который кошелёк покажет пользователю при подписи. Явно про отсутствие рисков. */
+/**
+ * Текст, который кошелёк покажет пользователю при подписи. Явно про отсутствие рисков.
+ *
+ * ТОЛЬКО ASCII из набора ниже — это не стилистика, а требование EIP-4361:
+ *   statement = 1*( reserved / unreserved / " " )
+ * где классы взяты из RFC 3986, то есть буквы, цифры и `-._~:/?#[]@!$&'()*+,;=`.
+ *
+ * Здесь стояло длинное тире «—» (U+2014). Phantom проверяет ABNF строго и отказывался
+ * подписывать с ошибкой «signature request cannot be shown due to invalid formatting» —
+ * вход не работал вообще. Регрессия закрыта тестом в lib/auth.test.ts.
+ */
 export const SIWE_STATEMENT =
-  "Sign in to The Vaultler. This proves you own this wallet — no transaction, no gas, no access to your funds.";
+  "Sign in to The Vaultler. This proves you own this wallet: no transaction, no gas, no access to your funds.";
+
+/**
+ * Допустимые символы statement по EIP-4361 (RFC 3986 reserved / unreserved / пробел).
+ * Вынесено, чтобы правило было проверяемым, а не жило в комментарии.
+ */
+export const SIWE_STATEMENT_ALLOWED = /^[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;= ]+$/;
 
 /** Сколько действует подпись. Короткое окно: пойманная подпись быстро протухает. */
 export const SIWE_TTL_MS = 5 * 60 * 1000;

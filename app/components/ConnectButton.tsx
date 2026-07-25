@@ -10,7 +10,7 @@ import {
 } from "wagmi";
 import { createSiweMessage } from "viem/siwe";
 import { SIWE_STATEMENT, SIWE_TTL_MS } from "@/lib/auth";
-import { robinhoodChain } from "@/lib/chain";
+import { robinhoodChain, RPC_CONFIGURED } from "@/lib/chain";
 
 export function shortAddr(a: string): string {
   return a.slice(0, 6) + "…" + a.slice(-4);
@@ -124,7 +124,7 @@ export default function ConnectButton({
   const { connectAsync, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
-  const { switchChain } = useSwitchChain();
+  const { switchChainAsync } = useSwitchChain();
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -133,9 +133,20 @@ export default function ConnectButton({
   const linked =
     !!wallet && !!address && wallet.toLowerCase() === address.toLowerCase();
   // Сравниваем с сетью КОШЕЛЬКА. Раньше сравнивался chainId конфига сам с собой,
-  // поэтому кнопка WRONG NET не показывалась никогда.
-  const wrongChain =
+  // поэтому подсказка не показывалась никогда.
+  const otherNetwork =
     isConnected && walletChainId !== undefined && walletChainId !== robinhoodChain.id;
+
+  /**
+   * Предлагать переключение имеет смысл только когда сеть реально существует.
+   * Без RPC в конфиге chainId — плейсхолдер, добавить такую сеть кошелёк не может,
+   * и кнопка гарантированно упиралась бы в ошибку.
+   *
+   * И это именно ПОДСКАЗКА, а не ошибка: игре сеть кошелька не нужна вообще. Вход —
+   * это подпись сообщения (RPC не требует), а баланс $VLTR читает сервер на своём RPC.
+   * Транзакций сайт не отправляет. Сеть нужна только чтобы купить/держать токен.
+   */
+  const canOfferSwitch = otherNetwork && RPC_CONFIGURED;
 
   // Убираем дубликаты (EIP-6963 может отдать тот же кошелёк, что и явный таргет).
   const seen = new Set<string>();
@@ -158,6 +169,23 @@ export default function ConnectButton({
       setOpen(false); // закрываем только по факту успеха
     } catch (e) {
       setErr(connectErrorText(e, c.name));
+    }
+  }
+
+  /**
+   * switchChainAsync, а не switchChain: у последнего ошибка уходит в состояние хука,
+   * промис не реджектится — неудачное переключение проходило бы совсем молча
+   * (та же болезнь, что была у connect).
+   */
+  async function doSwitchChain() {
+    setErr(null);
+    try {
+      await switchChainAsync({ chainId: robinhoodChain.id });
+    } catch (e) {
+      if (isUserRejection(e)) return;
+      setErr(
+        `Couldn't switch to ${robinhoodChain.name}. You can add it manually in your wallet — the game works either way.`,
+      );
     }
   }
 
@@ -285,13 +313,18 @@ export default function ConnectButton({
   // ── подключён и подписан ──
   return (
     <div className="wallet-inline">
-      {wrongChain && (
+      {/*
+        Не «WRONG NET»: ничего не сломано. Игре сеть кошелька безразлична — вход это
+        подпись, а баланс читает сервер. Это необязательная подсказка для тех, кто хочет
+        купить/держать $VLTR, поэтому нейтральный стиль, а не красная кнопка ошибки.
+      */}
+      {canOfferSwitch && (
         <button
-          className="btn btn-warn"
-          onClick={() => switchChain({ chainId: robinhoodChain.id })}
-          title="switch network"
+          className="btn btn-ghost"
+          onClick={doSwitchChain}
+          title={`Optional: switch to ${robinhoodChain.name} to buy or hold $VLTR. The game works on any network.`}
         >
-          WRONG NET
+          + {robinhoodChain.name.toUpperCase()}
         </button>
       )}
       <button className="btn btn-wood" onClick={() => setOpen(true)}>
@@ -301,16 +334,21 @@ export default function ConnectButton({
         <Modal onClose={() => setOpen(false)} title="WALLET">
           <p className="modal-note">{address}</p>
           <div className="modal-list">
-            <button
-              className="btn btn-wood wide"
-              onClick={() => switchChain({ chainId: robinhoodChain.id })}
-            >
-              ADD / SWITCH TO {robinhoodChain.name.toUpperCase()}
-            </button>
+            {/* Прячем, пока сеть — плейсхолдер: добавить несуществующий чейн нельзя. */}
+            {RPC_CONFIGURED && (
+              <button className="btn btn-wood wide" onClick={doSwitchChain}>
+                ADD / SWITCH TO {robinhoodChain.name.toUpperCase()}
+              </button>
+            )}
             <button className="btn btn-ghost wide" disabled={busy} onClick={logout}>
               DISCONNECT
             </button>
           </div>
+          {err && <p className="modal-err">{err}</p>}
+          <p className="modal-note dim">
+            Your wallet&apos;s network doesn&apos;t affect the game: signing in needs no
+            network, and we read your $VLTR balance server-side.
+          </p>
         </Modal>
       )}
     </div>

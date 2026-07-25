@@ -17,6 +17,9 @@
 import { privateKeyToAccount, generatePrivateKey, mnemonicToAccount } from "viem/accounts";
 import { createSiweMessage } from "viem/siwe";
 import { createWalletClient, createPublicClient, http, parseUnits } from "viem";
+// Настоящая константа, а не копия: иначе тест подписывает сообщение, которого
+// приложение не отправляет (так и пропустили несовместимый statement).
+import { SIWE_STATEMENT } from "../lib/auth.ts";
 
 const BASE = process.env.BASE ?? "http://localhost:3100";
 const RPC_URL = process.env.RPC_URL ?? "http://127.0.0.1:8545";
@@ -95,7 +98,7 @@ async function signIn(jar, account) {
   const message = createSiweMessage({
     domain: HOST,
     address: account.address,
-    statement: "Sign in to The Vaultler.",
+    statement: SIWE_STATEMENT,
     uri: BASE,
     version: "1",
     chainId: CHAIN_ID,

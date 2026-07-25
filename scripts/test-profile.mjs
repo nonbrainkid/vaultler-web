@@ -1,6 +1,8 @@
 // Сквозной тест профиля: вход кошельком → ник → уникальность → приватность адреса.
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import { createSiweMessage } from "viem/siwe";
+// Настоящая константа, а не копия — см. lib/auth.test.ts.
+import { SIWE_STATEMENT } from "../lib/auth.ts";
 
 const BASE = process.env.BASE ?? "http://localhost:3000";
 const HOST = new URL(BASE).host;
@@ -21,7 +23,7 @@ async function login(jar, account) {
   const { nonce } = await nres.json();
   const issuedAt = new Date();
   const msg = createSiweMessage({
-    domain: HOST, address: account.address, statement: "Sign in.", uri: BASE,
+    domain: HOST, address: account.address, statement: SIWE_STATEMENT, uri: BASE,
     version: "1", chainId: 88991, nonce, issuedAt,
     expirationTime: new Date(issuedAt.getTime() + 300000),
   });

@@ -2,6 +2,10 @@
 // Проверяет и успешный вход, и что защита реально отвергает плохие подписи.
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import { createSiweMessage } from "viem/siwe";
+// Именно настоящая константа, а не своя копия: с захардкоженным ASCII-текстом тест
+// проверял сообщение, которого приложение никогда не отправляет, и пропустил поломку
+// (длинное тире в statement — кошельки отказывались подписывать).
+import { SIWE_STATEMENT } from "../lib/auth.ts";
 
 const BASE = process.env.BASE ?? "http://localhost:3000";
 const HOST = new URL(BASE).host;
@@ -40,7 +44,7 @@ function siwe(account, nonce, overrides = {}) {
   return createSiweMessage({
     domain: HOST,
     address: account.address,
-    statement: "Sign in to The Vaultler.",
+    statement: SIWE_STATEMENT,
     uri: BASE,
     version: "1",
     chainId: 88991,
