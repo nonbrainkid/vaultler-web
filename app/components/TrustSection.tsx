@@ -23,9 +23,9 @@ const STATUS = [
     d: "Launched and trading. Verify the contract address in the $VLTR section above before you buy anything.",
   },
   {
-    s: "wip",
+    s: "live",
     t: "On-chain boost",
-    d: "Wired up and re-checked on every crank; switches on once the network RPC is configured.",
+    d: "Live: we read your $VLTR share of supply on Robinhood Chain and re-check it on every crank.",
   },
   { s: "todo", t: "Contract audit", d: "Not audited. No contract holds funds today." },
 ];

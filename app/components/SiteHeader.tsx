@@ -10,6 +10,7 @@ const NAV = [
   { href: "#how", label: "How it works" },
   { href: "#token", label: "$VLTR" },
   { href: "#board", label: "Leaderboard" },
+  { href: "#roadmap", label: "Roadmap" },
   { href: "#faq", label: "FAQ" },
 ];
 

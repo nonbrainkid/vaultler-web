@@ -4,6 +4,7 @@ import HowItWorks from "./components/HowItWorks";
 import GameSection from "./components/GameSection";
 import TokenSection from "./components/TokenSection";
 import TrustSection from "./components/TrustSection";
+import Roadmap from "./components/Roadmap";
 import Faq from "./components/Faq";
 import SiteFooter from "./components/SiteFooter";
 import { holderLadder } from "@/lib/game";
@@ -24,6 +25,7 @@ export default function Home() {
         <GameSection ladder={holderLadder()} />
         <TokenSection />
         <TrustSection />
+        <Roadmap />
         <Faq />
       </main>
       <SiteFooter />

@@ -562,6 +562,74 @@ body {
   word-break: break-all;
   user-select: all;
 }
+/* ───────────── роадмап ───────────── */
+.rm-two {
+  margin-bottom: 12px;
+}
+/* «top priority» рядом с названием, а не отдельной строкой — иначе первый пункт
+   визуально теряется среди остальных. */
+.rm-top {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-family: var(--pixel);
+  font-size: 7px;
+  color: var(--void);
+  background: var(--gold);
+  vertical-align: middle;
+}
+.rm-fees,
+.rm-never {
+  margin-bottom: 12px;
+}
+.rm-split {
+  margin-bottom: 16px;
+}
+.rm-curve-h {
+  margin-top: 4px;
+}
+/* Полосы долей: ширина пропорциональна весу места, чтобы кривая читалась глазом. */
+.rm-bars {
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+}
+.rm-bar {
+  display: grid;
+  grid-template-columns: 34px 1fr 52px;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.rm-rank {
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--muted);
+}
+.rm-track {
+  height: 12px;
+  background: #0d0904;
+  border: 2px solid var(--wood-darker);
+}
+.rm-fill {
+  display: block;
+  height: 100%;
+  background: var(--neon-2);
+}
+.rm-bar.lead .rm-fill {
+  background: var(--gold);
+}
+.rm-bar.lead .rm-rank,
+.rm-bar.lead .rm-pct {
+  color: var(--gold-hi);
+}
+.rm-pct {
+  font-size: 14px;
+  color: var(--sand);
+  text-align: right;
+}
+
 .ca-actions {
   display: flex;
   gap: 8px;
