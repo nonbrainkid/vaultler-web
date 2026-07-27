@@ -37,6 +37,38 @@ export interface LeaderboardView {
   week: WeekInfo;
 }
 
+/**
+ * Кошельки команды: играют как все, но в борде и призовом пуле не участвуют.
+ *
+ * На сайте написано «nothing goes to the team». Кошелёк разработчика в топ-10, который
+ * делит реальные токены, прямо этому противоречит — и это первое, что найдут, когда
+ * начнут проверять выплаты. Поэтому исключение делается не «спрятать строку в вёрстке»,
+ * а вырезать игрока из САМОГО расчёта: он не занимает место, не попадает в счётчик
+ * игроков и не раздувает общий сейф. Раз выплаты делаются руками по этому борду,
+ * «нет в борде» и означает «не получает».
+ *
+ * Список — в серверной переменной `BOARD_EXCLUDE` (адреса через запятую). Не в коде,
+ * потому что состав команды меняется чаще, чем выходит релиз; не в базе, чтобы не
+ * мигрировать живую таблицу ради конфигурации. Наружу список не отдаётся никогда.
+ */
+export function parseExcluded(raw: string | undefined): Set<string> {
+  const out = new Set<string>();
+  for (const part of (raw ?? "").split(/[\s,;]+/)) {
+    const addr = part.trim().toLowerCase();
+    // Мусор молча игнорируем: опечатка в env не должна выкидывать из борда случайного
+    // игрока и не должна ронять борд целиком.
+    if (/^0x[0-9a-f]{40}$/.test(addr)) out.add(addr);
+  }
+  return out;
+}
+
+/** Исключён ли игрок из борда. Сравниваем по адресу кошелька, регистр не важен. */
+function isExcluded(identity: string, excluded: Set<string>): boolean {
+  if (excluded.size === 0) return false;
+  const addr = addressFromIdentity(identity);
+  return addr !== null && excluded.has(addr.toLowerCase());
+}
+
 function shortAddr(a: string): string {
   return a.slice(0, 6) + "…" + a.slice(-4);
 }
@@ -75,9 +107,14 @@ export function buildLeaderboard(
   meIdentity: string,
   limit = 10,
 ): LeaderboardView {
+  // Кошельки команды вырезаем ДО расчёта: иначе они занимали бы места в топ-10 и
+  // попадали в счётчик игроков и в общий сейф.
+  const excluded = parseExcluded(process.env.BOARD_EXCLUDE);
+  const eligible = snapshot.filter((p) => !isExcluded(p.identity, excluded));
+
   // Живой стек каждого через settle: он же переводит игрока на текущую неделю и
   // фиксирует базу `weekStartStack`, если игрок с прошлой недели ещё не заходил.
-  const live = snapshot.map((p) => {
+  const live = eligible.map((p) => {
     const state: PlayerState = settle(p.state, now).state;
     return {
       identity: p.identity,

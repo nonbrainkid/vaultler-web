@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildLeaderboard, weekInfo } from "./leaderboard";
+import { buildLeaderboard, parseExcluded, weekInfo } from "./leaderboard";
 import { initialState, type PlayerState } from "./game";
 import type { PlayerSnapshot } from "./store";
 
@@ -89,6 +89,86 @@ describe("weekInfo — граница недели", () => {
     const w = weekInfo(justAfterReset);
     // до следующего сброса почти полные 7 суток
     expect(w.endsInMs).toBeGreaterThan(6.9 * DAY);
+  });
+});
+
+/**
+ * Кошельки команды не должны попадать в борд: на сайте написано «nothing goes to the
+ * team», а выплаты делаются руками по этому же борду — значит «нет в борде» и означает
+ * «не получает». Проверяем, что игрок вырезается из РАСЧЁТА, а не прячется в вёрстке.
+ */
+describe("исключение кошельков команды", () => {
+  const DEV = "wallet:0x5a443ffafe4c2a7d16f242eebcbabb1f46ca7baa";
+  const snap: PlayerSnapshot[] = [
+    { identity: DEV, state: off(9999) },
+    { identity: "wallet:0xabc0000000000000000000000000000000000001", state: off(100) },
+    { identity: "dev:someone", state: off(50) },
+  ];
+  const withEnv = (value: string | undefined, fn: () => void) => {
+    const prev = process.env.BOARD_EXCLUDE;
+    if (value === undefined) delete process.env.BOARD_EXCLUDE;
+    else process.env.BOARD_EXCLUDE = value;
+    try {
+      fn();
+    } finally {
+      if (prev === undefined) delete process.env.BOARD_EXCLUDE;
+      else process.env.BOARD_EXCLUDE = prev;
+    }
+  };
+
+  it("исключённый кошелёк не занимает место, и топ смыкается", () => {
+    withEnv("0x5a443ffafe4c2a7d16f242eebcbabb1f46ca7baa", () => {
+      const lb = buildLeaderboard(snap, NOW, "dev:someone");
+      expect(lb.top.map((r) => r.stack)).toEqual([100, 50]);
+      expect(lb.top[0].rank).toBe(1); // первое место достаётся живому игроку
+      expect(lb.top.some((r) => r.address === "0x5a443ffafe4c2a7d16f242eebcbabb1f46ca7baa")).toBe(
+        false,
+      );
+    });
+  });
+
+  it("не считается ни в числе игроков, ни в общем сейфе", () => {
+    withEnv("0x5a443ffafe4c2a7d16f242eebcbabb1f46ca7baa", () => {
+      const lb = buildLeaderboard(snap, NOW, "dev:someone");
+      expect(lb.players).toBe(2);
+      expect(lb.communalVault).toBe(150); // 9999 команды не подмешался
+    });
+  });
+
+  it("сам исключённый игрок не видит у себя ранга (но играть ему ничто не мешает)", () => {
+    withEnv("0x5a443ffafe4c2a7d16f242eebcbabb1f46ca7baa", () => {
+      expect(buildLeaderboard(snap, NOW, DEV).you).toBeNull();
+    });
+  });
+
+  it("регистр адреса не важен", () => {
+    withEnv("0x5A443FFAFE4C2A7D16F242EEBCBABB1F46CA7BAA", () => {
+      expect(buildLeaderboard(snap, NOW, "dev:someone").players).toBe(2);
+    });
+  });
+
+  it("без переменной борд не меняется", () => {
+    withEnv(undefined, () => {
+      expect(buildLeaderboard(snap, NOW, "dev:someone").players).toBe(3);
+    });
+  });
+
+  /** Опечатка в env не должна ни ронять борд, ни выкидывать случайного игрока. */
+  it("мусор в списке игнорируется, валидные адреса продолжают работать", () => {
+    withEnv("не адрес, 0x123, , 0x5a443ffafe4c2a7d16f242eebcbabb1f46ca7baa", () => {
+      const lb = buildLeaderboard(snap, NOW, "dev:someone");
+      expect(lb.players).toBe(2);
+    });
+    expect(parseExcluded("0xZZZ, 0x1")).toEqual(new Set());
+    expect(parseExcluded(undefined)).toEqual(new Set());
+  });
+
+  it("разделители — запятая, пробел, точка с запятой", () => {
+    const a = "0x5a443ffafe4c2a7d16f242eebcbabb1f46ca7baa";
+    const b = "0xabc0000000000000000000000000000000000001";
+    expect(parseExcluded(`${a},${b}`).size).toBe(2);
+    expect(parseExcluded(`${a} ${b}`).size).toBe(2);
+    expect(parseExcluded(`${a}; ${b}`).size).toBe(2);
   });
 });
 
