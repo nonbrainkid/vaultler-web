@@ -562,53 +562,123 @@ body {
   word-break: break-all;
   user-select: all;
 }
-/* ───────────── роадмап ───────────── */
-.rm-two {
+/* ───────────── роадмап ─────────────
+   Раньше секция переиспользовала сетку статусов из TrustSection (точка | ярлык | текст).
+   В узких карточках она сжимала описание в колонку шириной в пару слов, и блок читался
+   как стена мелкого текста. Здесь своя раскладка: заголовок пункта отдельной строкой,
+   описание под ним во всю ширину карточки, цветная полоса слева вместо ярлыка. */
+.rm-cols {
+  display: grid;
+  gap: 12px;
   margin-bottom: 12px;
 }
-/* «top priority» рядом с названием, а не отдельной строкой — иначе первый пункт
-   визуально теряется среди остальных. */
-.rm-top {
+.rm-card {
+  display: flex;
+  flex-direction: column;
+}
+.rm-list,
+.rm-never {
+  list-style: none;
+  display: grid;
+  gap: 14px;
+}
+.rm-item {
+  border-left: 3px solid var(--wood);
+  padding-left: 12px;
+}
+.rm-card.is-live .rm-item {
+  border-left-color: var(--neon-2);
+}
+.rm-card.is-next .rm-item {
+  border-left-color: var(--gold-lo);
+}
+.rm-card.is-next .rm-item.is-first {
+  border-left-color: var(--gold);
+}
+.rm-card.is-never .rm-item {
+  border-left-color: var(--rust);
+}
+.rm-t {
+  display: block;
+  color: var(--bone);
+  font-size: 17px;
+  line-height: 1.3;
+}
+.rm-d {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 15px;
+}
+/* «top priority» рядом с названием: в списке из четырёх пунктов приоритет иначе теряется */
+.rm-flag {
   display: inline-block;
   margin-left: 8px;
-  padding: 1px 6px;
+  padding: 2px 6px;
   font-family: var(--pixel);
   font-size: 7px;
   color: var(--void);
   background: var(--gold);
   vertical-align: middle;
 }
-.rm-fees,
-.rm-never {
+
+/* дележ фисов: проценты крупно — их ищут глазами первыми */
+.rm-fees {
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+.rm-fees li {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.rm-fees b {
+  color: var(--bone);
+}
+.rm-num {
+  font-family: var(--pixel);
+  font-size: 15px;
+  text-align: right;
+}
+.rm-num.neon {
+  color: var(--neon);
+}
+.rm-num.gold {
+  color: var(--gold);
+}
+.rm-num.zero {
+  color: var(--steel-lite);
+}
+
+.rm-lead {
   margin-bottom: 12px;
-}
-.rm-split {
-  margin-bottom: 16px;
-}
-.rm-curve-h {
-  margin-top: 4px;
 }
 /* Полосы долей: ширина пропорциональна весу места, чтобы кривая читалась глазом. */
 .rm-bars {
   list-style: none;
   display: grid;
-  gap: 4px;
-  margin: 12px 0;
+  gap: 5px;
+  margin-bottom: 12px;
 }
 .rm-bar {
   display: grid;
-  grid-template-columns: 34px 1fr 52px;
+  grid-template-columns: 20px 1fr 50px;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-variant-numeric: tabular-nums;
 }
 .rm-rank {
   font-family: var(--pixel);
   font-size: 8px;
   color: var(--muted);
+  text-align: right;
 }
 .rm-track {
-  height: 12px;
+  height: 10px;
   background: #0d0904;
   border: 2px solid var(--wood-darker);
 }
@@ -617,17 +687,30 @@ body {
   height: 100%;
   background: var(--neon-2);
 }
-.rm-bar.lead .rm-fill {
+.rm-bar.is-lead .rm-fill {
   background: var(--gold);
 }
-.rm-bar.lead .rm-rank,
-.rm-bar.lead .rm-pct {
+.rm-bar.is-lead .rm-rank,
+.rm-bar.is-lead .rm-pct {
   color: var(--gold-hi);
 }
 .rm-pct {
   font-size: 14px;
   color: var(--sand);
   text-align: right;
+}
+
+@media (min-width: 640px) {
+  /* «чего не будет никогда» — три коротких пункта в строку, чтобы блок не тянулся */
+  .rm-never {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 900px) {
+  .rm-cols {
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
 }
 
 .ca-actions {
