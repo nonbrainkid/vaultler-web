@@ -71,6 +71,51 @@ OG-картинке останется `http://localhost:3000`. Серверны
 Редирект со старого адреса не косметика: `AUTH_DOMAIN` пинит **один** хост, и вход
 кошельком на любом другом хосте отвечал бы ошибкой проверки подписи.
 
+## Миграция `WeekResult` (обязательна до субботы 01.08)
+
+Таблица результатов недели добавлена 2026-07-28, в проде её ещё нет. Обращение к ней
+случается **впервые в субботу в полночь**, внутри транзакции кранка: без миграции упадёт
+не запись результата, а сам кранк — игра встанет в день выплаты. Проверка:
+`/api/health` → `weekResults` должно стать `"ready"`.
+
+**Способ 1 — Prisma (предпочтительно).** Вписать прод-строку подключения в `.env.local`
+(файл в `.gitignore`, наружу не уходит) и выполнить:
+
+```bash
+npx prisma db push
+```
+
+**Способ 2 — SQL руками** в консоли Neon (Vercel → Storage → vaultler-db → Query,
+предварительно сняв Read-only). Таблица новая и аддитивная, существующие данные не
+затрагиваются:
+
+```sql
+CREATE TABLE IF NOT EXISTS "WeekResult" (
+  "id"        TEXT NOT NULL,
+  "weekId"    INTEGER NOT NULL,
+  "identity"  TEXT NOT NULL,
+  "address"   TEXT,
+  "gain"      DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "rank"      INTEGER,
+  "eligible"  BOOLEAN NOT NULL DEFAULT false,
+  "share"     DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "payoutTx"  TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "WeekResult_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "WeekResult_weekId_identity_key"
+  ON "WeekResult"("weekId", "identity");
+CREATE INDEX IF NOT EXISTS "WeekResult_weekId_rank_idx"
+  ON "WeekResult"("weekId", "rank");
+```
+
+После этого — добавить `ADMIN_SECRET` в env проекта и прогнать репетицию:
+
+```bash
+ADMIN_SECRET=... VAULTLER_URL=https://thevaultler.fun npm run close:week -- --dry
+```
+
 ## Runbook: Vercel
 
 1. **Проект.** Vercel → Add New → Project → импортировать репозиторий. Framework
