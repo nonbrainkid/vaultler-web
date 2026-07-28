@@ -60,7 +60,7 @@ export default function SiteHeader() {
                   rel="noopener noreferrer"
                   aria-label={l.label}
                 >
-                  {l.key === "x" ? "𝕏" : l.key === "tg" ? "TG" : "DEX"}
+                  {l.short}
                 </a>
               ) : (
                 <button
@@ -69,7 +69,7 @@ export default function SiteHeader() {
                   disabled
                   aria-label={`${l.label} — coming soon`}
                 >
-                  {l.key === "tg" ? "TG" : "DEX"}
+                  {l.short}
                 </button>
               ),
             )}

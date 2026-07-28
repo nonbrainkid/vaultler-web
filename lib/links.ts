@@ -5,6 +5,14 @@
 export interface SiteLink {
   key: string;
   label: string;
+  /**
+   * Короткая подпись для тесной шапки. Обязательное поле, а не вывод по `key` в разметке:
+   * раньше подпись выбиралась цепочкой тернарников с фолбэком на «DEX», и добавленная
+   * ссылка на бота молча отрисовалась второй кнопкой «DEX». На странице мем-токена
+   * кнопка, ведущая не туда, куда написано, — это заготовка для фишинга, а не косметика,
+   * поэтому подпись обязана ехать вместе с ссылкой и ломать сборку, если её забыли.
+   */
+  short: string;
   href: string | null;
   note?: string;
 }
@@ -26,13 +34,14 @@ export const TELEGRAM_BOT_USERNAME =
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME?.trim() || TELEGRAM_BOT_USERNAME_DEFAULT;
 
 export const LINKS: SiteLink[] = [
-  { key: "x", label: "X / TWITTER", href: "https://x.com/VaultlerRH" },
+  { key: "x", label: "X / TWITTER", short: "𝕏", href: "https://x.com/VaultlerRH" },
   // Канал комьюнити — не путать с личным ботом напоминаний ниже: игрок не должен искать
   // напоминания в канале и наоборот, у них разные назначения и разные t.me-адреса.
-  { key: "tg", label: "TELEGRAM", href: "https://t.me/VaultlerRH" },
+  { key: "tg", label: "TELEGRAM", short: "TG", href: "https://t.me/VaultlerRH" },
   {
     key: "tgbot",
     label: "REMINDER BOT",
+    short: "BOT",
     href: `https://t.me/${TELEGRAM_BOT_USERNAME}`,
   },
   // URL пары — как его дал владелец проекта, дословно. В пути DEXScreener стоит адрес
@@ -41,6 +50,7 @@ export const LINKS: SiteLink[] = [
   {
     key: "dex",
     label: "DEXSCREENER",
+    short: "DEX",
     href: "https://dexscreener.com/robinhood/0x1e8e3098bc37d2343f2c27871c29a785b554a920",
   },
 ];
