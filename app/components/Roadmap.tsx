@@ -38,6 +38,27 @@ const NEXT = [
   },
 ];
 
+/**
+ * Лестница верифицируемости (docs/roadmap.md, «Стратегические направления»): наружу
+ * идут только C1–C3, переформулированные как обещание игроку, а не внутренний план.
+ * C4 (merkle-распределитель выплат) и разбор «почему не делаем кастодию» сюда намеренно
+ * не попадают — так решено в разделе «Публичная версия» того же документа.
+ */
+const PROOF = [
+  {
+    t: "Signed weekly results",
+    d: "Every week's board gets signed with a key, and the public key lives right here on the site — anyone can check a result is genuinely ours and untouched.",
+  },
+  {
+    t: "An independent timestamp",
+    d: "The hash of each week's snapshot goes into a transaction on chain. Once it's there, not even we can rewrite who won after the fact.",
+  },
+  {
+    t: "Open log, open math",
+    d: "The crank log goes public, pseudonymous, next to the code that turns it into a board. Run it yourself and get our exact numbers back — don't take our word for it.",
+  },
+];
+
 const NEVER = [
   { t: "Custody or deposits", d: "No staking contract. Not now, not later." },
   { t: "A promised yield", d: "$STACK is a game score with no monetary value." },
@@ -150,6 +171,22 @@ export default function Roadmap() {
             </p>
           </article>
         </div>
+
+        <article className="card rm-card is-proof">
+          <h3 className="card-h gold">PROOF, NOT PROMISES</h3>
+          <p className="rm-lead">
+            Everything above is a claim. A claim you cannot check is worth nothing, so
+            here is how each week gets checked instead of trusted:
+          </p>
+          <ul className="rm-list">
+            {PROOF.map((r) => (
+              <li className="rm-item" key={r.t}>
+                <span className="rm-t">{r.t}</span>
+                <span className="rm-d">{r.d}</span>
+              </li>
+            ))}
+          </ul>
+        </article>
 
         <article className="card rm-card is-never">
           <h3 className="card-h">WHAT WE WILL NEVER BUILD</h3>

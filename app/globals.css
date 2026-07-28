@@ -595,6 +595,9 @@ body {
 .rm-card.is-next .rm-item.is-first {
   border-left-color: var(--gold);
 }
+.rm-card.is-proof .rm-item {
+  border-left-color: var(--gold-lo);
+}
 .rm-card.is-never .rm-item {
   border-left-color: var(--rust);
 }
