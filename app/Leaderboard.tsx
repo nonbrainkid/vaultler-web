@@ -96,8 +96,9 @@ export default function Leaderboard({
         <span className="amt">{lb ? fmt(lb.communalVault) : "—"} $STACK</span>
       </div>
       <div className="subline">
-        The <b>top 10</b> split the weekly pool — half of the token&apos;s trading fees,
-        paid in real tokens. Resets <b>Saturday 00:00 New York</b>, in{" "}
+        The <b>top {lb?.payoutSeats ?? 10}</b>{" "}
+        split the weekly pool — half of the token&apos;s trading fees, paid in real
+        tokens. Resets <b>Saturday 00:00 New York</b>, in{" "}
         <b>{lb ? fmtWeek(lb.week.endsInMs) : "—"}</b> · <b>{lb?.players ?? 0}</b> stackers
       </div>
       <div className="paidzone">

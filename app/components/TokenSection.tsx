@@ -26,7 +26,8 @@ export default function TokenSection() {
             <h3 className="card-h neon">HOLD = A HIGHER STEP</h3>
             <p>
               Your $VLTR bag puts you on a <b>ladder</b>: five steps from <b>×1.5</b> to{" "}
-              <b>×5</b> stacking speed, and each step asks for a bigger share of the total
+              <b>×5</b>{" "}
+              stacking speed, and each step asks for a bigger share of the total
               supply. Non-holders stack at ×1. That&apos;s the utility — no deposit, no
               lockup, no staking contract, the site just reads your balance on-chain. Speed
               is capped at ×5, so no bag is big enough to own the board outright.

@@ -14,7 +14,7 @@ export default function Hero() {
           </h1>
           <p className="hero-tag">Wind it. It stacks while you sleep.</p>
           <p className="hero-sub">
-            Everyone else is over-trading and down bbad. You just wound the machine and
+            Everyone else is over-trading and down bad. You just wound the machine and
             let it cook. <b>Trading is cope. Stacking is based.</b>
           </p>
 
