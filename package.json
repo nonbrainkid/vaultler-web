@@ -17,7 +17,7 @@
     "test:profile": "node scripts/test-profile.mjs",
     "test:boost": "node scripts/test-boost.mjs",
     "test:telegram": "node scripts/test-telegram.mjs",
-    "telegram:setup": "node scripts/telegram-setup.mjs"
+    "telegram:setup": "node --env-file-if-exists=.env.local scripts/telegram-setup.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
