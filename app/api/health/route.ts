@@ -22,6 +22,19 @@ export async function GET(req: Request) {
     checks.store = "error";
   }
 
+  // Таблица результатов недели. Обращение к ней случается ВПЕРВЫЕ в субботу в полночь —
+  // когда первый игрок переходит через границу недели, прямо внутри транзакции кранка.
+  // Если миграция (`prisma db push`) не выполнена, отвалится не «запись результата», а
+  // сам кранк: игра встанет в самый важный день, и узнаем мы об этом от игроков.
+  // Поэтому проверяем заранее и явно.
+  try {
+    await (await getStore()).weekResults(0);
+    checks.weekResults = "ready";
+  } catch {
+    ok = false;
+    checks.weekResults = "missing";
+  }
+
   checks.sessionSecret = process.env.SESSION_SECRET ? "set" : "default";
   checks.chain = process.env.NEXT_PUBLIC_RH_RPC_URL ? "configured" : "placeholder";
   // Домен для проверки SIWE-подписи. "host" в проде — дыра: подпись сверяется с тем,
