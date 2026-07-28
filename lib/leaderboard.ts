@@ -9,7 +9,9 @@
  */
 import { settle, type PlayerState } from "./game";
 import { addressFromIdentity } from "./auth";
+import { PAYOUT_SEATS } from "./payout";
 import type { PlayerSnapshot } from "./store";
+import { isPayoutEligible } from "./week-results";
 import { weekInfo, type WeekInfo } from "./week";
 
 export { weekInfo };
@@ -27,14 +29,35 @@ export interface LeaderRow {
   lifetimeStack: number;
   streak: number;
   isYou: boolean;
+  /**
+   * Может ли игрок получить выплату: нужен подтверждённый кошелёк.
+   * Анонимной сессии токены отправить некуда, и заводится она бесплатно в один клик —
+   * см. `isPayoutEligible` в lib/week-results.ts.
+   */
+  eligible: boolean;
+  /**
+   * Место в призовой зоне (1…10) или null, если вне денег.
+   *
+   * НЕ равно `rank`: призовые места считаются по первым `PAYOUT_SEATS` подтверждённым
+   * кошелькам, а в общем зачёте выше может стоять аноним. Так на борде честно видно и
+   * гонку целиком, и то, кому реально уйдут токены.
+   */
+  moneyRank: number | null;
 }
 
 export interface LeaderboardView {
   communalVault: number; // сумма живых стеков всего комьюнити
   players: number;
   top: LeaderRow[];
-  you: { rank: number; stack: number } | null;
+  you: {
+    rank: number;
+    stack: number;
+    eligible: boolean;
+    moneyRank: number | null;
+  } | null;
   week: WeekInfo;
+  /** Сколько мест в деньгах вообще бывает — чтобы клиент не хардкодил десятку. */
+  payoutSeats: number;
 }
 
 /**
@@ -110,11 +133,14 @@ export function buildLeaderboard(
   // Кошельки команды вырезаем ДО расчёта: иначе они занимали бы места в топ-10 и
   // попадали в счётчик игроков и в общий сейф.
   const excluded = parseExcluded(process.env.BOARD_EXCLUDE);
-  const eligible = snapshot.filter((p) => !isExcluded(p.identity, excluded));
+  // Имя `ranked`, а не `eligible`: «eligible» в этом файле теперь означает право на
+  // ВЫПЛАТУ (подтверждённый кошелёк), и две разные проверки под одним именем читались бы
+  // как одна.
+  const ranked = snapshot.filter((p) => !isExcluded(p.identity, excluded));
 
   // Живой стек каждого через settle: он же переводит игрока на текущую неделю и
   // фиксирует базу `weekStartStack`, если игрок с прошлой недели ещё не заходил.
-  const live = eligible.map((p) => {
+  const live = ranked.map((p) => {
     const state: PlayerState = settle(p.state, now).state;
     return {
       identity: p.identity,
@@ -133,7 +159,31 @@ export function buildLeaderboard(
   // комьюнити настакало вообще, и обнулять её каждую субботу бессмысленно.
   const communalVault = live.reduce((sum, p) => sum + p.lifetimeStack, 0);
 
-  const top: LeaderRow[] = live.slice(0, limit).map((p, i) => ({
+  // Раздача призовых мест идёт сверху вниз по борду, но занимают их только подтверждённые
+  // кошельки: анонимной сессии платить некуда, а завести её можно бесплатно и сколько
+  // угодно раз. Нулевой прирост места не занимает — платить за неучастие не за что,
+  // иначе пустые сессии добирали бы хвост десятки.
+  let seat = 0;
+  const seated = live.map((p) => {
+    const eligible = isPayoutEligible(p.identity);
+    const inMoney = eligible && p.stack > 0 && seat < PAYOUT_SEATS;
+    return { ...p, eligible, moneyRank: inMoney ? ++seat : null };
+  });
+
+  // Сколько строк показать. Если половину верхушки занимают сессии без кошелька, десятое
+  // призовое место уезжает ниже десятой строки — борд, обрезанный по `limit`, показывал бы
+  // «в деньгах» тех, кому не платят, и прятал тех, кому платят. Поэтому дотягиваем список
+  // до последнего призового места, но не бесконечно: потолок — `limit + PAYOUT_SEATS`.
+  let lastSeatIndex = -1;
+  seated.forEach((p, i) => {
+    if (p.moneyRank !== null) lastSeatIndex = i;
+  });
+  const rowCount = Math.min(
+    Math.max(limit, lastSeatIndex + 1),
+    limit + PAYOUT_SEATS,
+  );
+
+  const top: LeaderRow[] = seated.slice(0, rowCount).map((p, i) => ({
     rank: i + 1,
     label: p.display.label,
     kind: p.display.kind,
@@ -142,11 +192,20 @@ export function buildLeaderboard(
     lifetimeStack: p.lifetimeStack,
     streak: p.streak,
     isYou: p.identity === meIdentity,
+    eligible: p.eligible,
+    moneyRank: p.moneyRank,
   }));
 
-  const myIndex = live.findIndex((p) => p.identity === meIdentity);
+  const myIndex = seated.findIndex((p) => p.identity === meIdentity);
   const you =
-    myIndex >= 0 ? { rank: myIndex + 1, stack: live[myIndex].stack } : null;
+    myIndex >= 0
+      ? {
+          rank: myIndex + 1,
+          stack: seated[myIndex].stack,
+          eligible: seated[myIndex].eligible,
+          moneyRank: seated[myIndex].moneyRank,
+        }
+      : null;
 
   return {
     communalVault,
@@ -154,5 +213,6 @@ export function buildLeaderboard(
     top,
     you,
     week: weekInfo(now),
+    payoutSeats: PAYOUT_SEATS,
   };
 }

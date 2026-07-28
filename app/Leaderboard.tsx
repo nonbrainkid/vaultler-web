@@ -12,6 +12,10 @@ interface LeaderRow {
   stack: number;
   streak: number;
   isYou: boolean;
+  /** Подтверждённый кошелёк — только такие места делят пул. */
+  eligible: boolean;
+  /** Место в призовой зоне; null — вне денег. Не равно `rank`. */
+  moneyRank: number | null;
 }
 
 function shortAddr(a: string): string {
@@ -21,8 +25,14 @@ interface LeaderboardView {
   communalVault: number;
   players: number;
   top: LeaderRow[];
-  you: { rank: number; stack: number } | null;
+  you: {
+    rank: number;
+    stack: number;
+    eligible: boolean;
+    moneyRank: number | null;
+  } | null;
   week: { weekId: number; endsInMs: number };
+  payoutSeats: number;
 }
 
 function fmt(n: number): string {
@@ -91,7 +101,12 @@ export default function Leaderboard({
         <b>{lb ? fmtWeek(lb.week.endsInMs) : "—"}</b> · <b>{lb?.players ?? 0}</b> stackers
       </div>
       <div className="paidzone">
-        ▸ ranks 1–10 are in the money · ranked by $STACK earned <b>this week</b>
+        ▸ the top <b>{lb?.payoutSeats ?? 10}</b> connected wallets are in the money ·
+        ranked by $STACK earned <b>this week</b>
+      </div>
+      <div className="subline">
+        Anyone can play and climb. A payout needs a connected wallet — there is nowhere
+        to send tokens otherwise.
       </div>
 
       {failed && (
@@ -116,7 +131,14 @@ export default function Leaderboard({
           lb.top.map((r) => (
             <div
               key={r.rank}
-              className={"lbrow" + (r.isYou ? " you" : "") + (r.rank <= 10 ? " paid" : "")}
+              className={
+                "lbrow" +
+                (r.isYou ? " you" : "") +
+                // «В деньгах» — не первые десять строк, а первые десять подтверждённых
+                // кошельков: подсветка обязана совпадать с тем, кому реально платят.
+                (r.moneyRank !== null ? " paid" : "") +
+                (r.eligible ? "" : " noteligible")
+              }
             >
               <span className="lbrank">{r.rank}</span>
               <span className="lblabel">
@@ -125,6 +147,11 @@ export default function Leaderboard({
                 {!(r.address && r.label === shortAddr(r.address)) && r.label}
                 {r.isYou ? " (you)" : ""}
                 {r.kind === "bot" && <em className="botmark">test</em>}
+                {r.kind === "anon" && (
+                  <em className="nowallet" title="No wallet connected — cannot be paid">
+                    no wallet
+                  </em>
+                )}
                 {r.address &&
                   (EXPLORER ? (
                     <a
@@ -152,14 +179,26 @@ export default function Leaderboard({
         )}
 
         {lb?.you && !youInTop && (
-          <div className="lbrow you outside">
+          <div className={"lbrow you outside" + (lb.you.eligible ? "" : " noteligible")}>
             <span className="lbrank">{lb.you.rank}</span>
-            <span className="lblabel">you — {lb.you.rank - 10} off the top 10</span>
+            <span className="lblabel">
+              you — {Math.max(1, lb.you.rank - lb.payoutSeats)} off the top{" "}
+              {lb.payoutSeats}
+            </span>
             <span className="lbstreak" />
             <span className="lbstack">{fmt(lb.you.stack)}</span>
           </div>
         )}
       </div>
+
+      {/* Своё место видно, а платить некуда — самый важный экран для конверсии в кошелёк:
+          игрок уже вложился временем, и именно здесь ему стоит сказать, чего не хватает. */}
+      {lb?.you && !lb.you.eligible && (
+        <p className="lb-cta">
+          You&apos;re #{lb.you.rank} — but a payout needs a wallet. Connect one and you&apos;re
+          in the running.
+        </p>
+      )}
     </div>
   );
 }

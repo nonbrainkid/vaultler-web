@@ -1327,6 +1327,30 @@ body {
   margin-left: 6px;
   vertical-align: middle;
 }
+/* Сессия без кошелька: играет и занимает место в гонке, но выплату получить не может —
+   отправлять токены некуда. Метка та же по форме, что у ботов, но цветом ближе к
+   предупреждению: это не «служебная строка», а живой игрок, которому стоит подключить
+   кошелёк. */
+.nowallet {
+  font-family: var(--pixel);
+  font-size: 6px;
+  font-style: normal;
+  color: var(--rust-hi);
+  border: 1px solid var(--rust);
+  padding: 2px 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+/* Строка вне денег не гасится полностью: игрок должен видеть свой прогресс, иначе
+   пропадает смысл играть до подключения кошелька. */
+.lbrow.noteligible .lbstack {
+  color: var(--muted);
+}
+.lb-cta {
+  margin-top: 10px;
+  color: var(--gold-lo);
+  font-size: 15px;
+}
 .lbstreak {
   font-size: 14px;
   color: var(--rust-hi);

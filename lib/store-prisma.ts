@@ -14,6 +14,12 @@ import type {
   SetProfileResult,
   Store,
 } from "./store";
+import {
+  addressOf,
+  closedWeekOf,
+  isPayoutEligible,
+  type WeekResultRecord,
+} from "./week-results";
 
 // Синглтон клиента (иначе dev-hot-reload плодит подключения).
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
@@ -112,6 +118,27 @@ export class PrismaStore implements Store {
           },
         });
       }
+
+      // Игрок перешёл через субботнюю границу — фиксируем результат закрытой недели ЗДЕСЬ,
+      // в той же транзакции, что и стейт. Позже это уже не восстановить: база недели
+      // (`weekStartStack`) только что перезаписана, и прирост прошлой недели из стейта
+      // больше не выводится.
+      const closed = closedWeekOf(state, outcome.state);
+      if (closed) {
+        await tx.weekResult.upsert({
+          where: { weekId_identity: { weekId: closed.weekId, identity } },
+          create: {
+            weekId: closed.weekId,
+            identity,
+            address: addressOf(identity),
+            gain: closed.gain,
+            eligible: isPayoutEligible(identity),
+          },
+          // Место, долю и хеш выплаты не трогаем: их проставляет финализация недели,
+          // и она может пройти раньше, чем проспавший игрок вернётся.
+          update: { gain: closed.gain },
+        });
+      }
       return outcome;
     });
   }
@@ -163,5 +190,58 @@ export class PrismaStore implements Store {
       }
       throw e;
     }
+  }
+
+  async saveWeekResults(records: readonly WeekResultRecord[]): Promise<number> {
+    if (records.length === 0) return 0;
+    // Одной транзакцией: неделя финализируется целиком либо не финализируется вовсе.
+    // Полуразмеченная неделя — это борд, где часть мест «в деньгах», а часть нет, и
+    // отличить незаконченную запись от законной невозможно.
+    await prisma.$transaction(
+      records.map((r) =>
+        prisma.weekResult.upsert({
+          where: { weekId_identity: { weekId: r.weekId, identity: r.identity } },
+          create: {
+            weekId: r.weekId,
+            identity: r.identity,
+            address: r.address,
+            gain: r.gain,
+            rank: r.rank,
+            eligible: r.eligible,
+            share: r.share,
+            payoutTx: r.payoutTx,
+          },
+          update: {
+            address: r.address,
+            gain: r.gain,
+            rank: r.rank,
+            eligible: r.eligible,
+            share: r.share,
+            // payoutTx перезаписываем ТОЛЬКО непустым значением: хеш вписывается вручную
+            // после отправки токенов, и повторный прогон финализации не должен стирать
+            // доказательство платежа.
+            ...(r.payoutTx ? { payoutTx: r.payoutTx } : {}),
+          },
+        }),
+      ),
+    );
+    return records.length;
+  }
+
+  async weekResults(weekId: number): Promise<WeekResultRecord[]> {
+    const rows = await prisma.weekResult.findMany({
+      where: { weekId },
+      orderBy: [{ rank: { sort: "asc", nulls: "last" } }, { gain: "desc" }],
+    });
+    return rows.map((r) => ({
+      weekId: r.weekId,
+      identity: r.identity,
+      address: r.address,
+      gain: r.gain,
+      rank: r.rank,
+      eligible: r.eligible,
+      share: r.share,
+      payoutTx: r.payoutTx,
+    }));
   }
 }

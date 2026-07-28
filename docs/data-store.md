@@ -23,6 +23,27 @@ DATABASE_URL пуст, prod   → падаем с внятной ошибкой
 | `mutate(identity, now, fn)` | read-modify-write чистой функцией из `lib/game` | лок / транзакция |
 | `snapshot()` | все игроки со стейтами — для борда | нет |
 | `setProfile(identity, now, patch)` | ник + приватность, с проверкой уникальности | глобальная сериализация |
+| `saveWeekResults(records)` | результаты завершённой недели | одна транзакция на всю неделю |
+| `weekResults(weekId)` | кто и с каким местом закончил неделю | нет |
+
+### Результаты недели фиксирует сам `mutate`
+
+Помимо стейта и журнала кранков, `mutate` записывает **результат завершённой недели**,
+если `fn` перевела игрока через субботнюю границу (`closedWeekOf`, `lib/week-results.ts`).
+Делает это реализация стора, а не вызывающий код — по той же причине, по которой перевод
+недели живёт внутри `settle`: через `mutate` проходят все пути записи, и любой новый роут
+иначе мог бы «забыть» зафиксировать неделю.
+
+Почему это вообще нужно: ранг на борде считается как `stack - weekStartStack`, а база
+перезаписывается при первом же обращении игрока после полуночи. Без записи в момент
+перехода список победителей **исчезает ровно тогда, когда по нему надо платить**.
+Прирост берётся как разница двух баз (`next.weekStartStack - prev.weekStartStack`) —
+то есть из того же следа, который `settle` уже оставляет, без второй реализации подсчёта,
+способной разойтись с бордом.
+
+Место (`rank`) при этом остаётся `null`: оно свойство всей таблицы, а не игрока. Ранги и
+доли пула проставляет финализация — `POST /api/admin/close-week` (`docs/api.md`), она же
+досчитывает тех, кто после субботы так и не вернулся.
 
 ## Почему `mutate` — атомарный
 
@@ -69,6 +90,8 @@ model Player {
   machineOn    Boolean  @default(false)
   boostTier    Int      @default(0)   // ступень HOLDER_TIERS (0 — не холдит)
   boostPpb     Int      @default(0)   // доля в эмиссии (ppb) на момент чтения чейна
+  weekId         Int   @default(0)    // неделя, к которой отнесён текущий прогресс
+  weekStartStack Float @default(0)    // база недели: ранг = stack − weekStartStack
   nickname     String?
   nicknameKey  String?  @unique   // lowercase — ключ уникальности
   hideWallet   Boolean  @default(false)
@@ -88,6 +111,20 @@ model CrankLog {                  // аудит кранков: анти-чит 
   stack Float        // стек ПОСЛЕ кранка — точка отсчёта при разборе
   lostToRaid Float?  // ским рейдера в этом же settle; null — рейда не было
   @@index([playerId, at])
+}
+
+model WeekResult {                  // итоги завершённой недели — по ним платят
+  id String @id @default(cuid())
+  weekId   Int
+  identity String                   // internal id; наружу не отдаётся
+  address  String?                  // адрес для выплаты; null — игрок без кошелька
+  gain     Float   @default(0)      // прирост за неделю, по нему ранжируют
+  rank     Int?                     // место в деньгах; null — вне денег / не финализирована
+  eligible Boolean @default(false)  // подтверждённый кошелёк
+  share    Float   @default(0)      // доля пула (0…1), перенормированная на число мест
+  payoutTx String?                  // хеш выплаты, вписывается вручную
+  @@unique([weekId, identity])      // идемпотентность повторного закрытия
+  @@index([weekId, rank])
 }
 ```
 

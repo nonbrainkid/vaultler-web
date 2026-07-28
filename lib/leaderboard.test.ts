@@ -234,7 +234,94 @@ describe("buildLeaderboard", () => {
   it("отмечает «you» и отдаёт ранг игрока", () => {
     const lb = buildLeaderboard(snap, NOW, "dev:me");
     expect(lb.top.find((r) => r.isYou)?.stack).toBe(50);
-    expect(lb.you).toEqual({ rank: 3, stack: 50 });
+    // dev-сессия без кошелька: ранг есть, права на выплату нет
+    expect(lb.you).toEqual({ rank: 3, stack: 50, eligible: false, moneyRank: null });
+  });
+
+  /**
+   * Призовая зона (решение 2026-07-28). На проде 6 из 10 мест занимали сессии без
+   * кошелька: платить им физически некуда, а завести такую сессию можно бесплатно в
+   * инкогнито сколько угодно раз. Поэтому места в деньгах считаются по подтверждённым
+   * кошелькам, а сам борд по-прежнему показывает всех — иначе анониму нечем измерить,
+   * что он теряет.
+   */
+  describe("призовая зона считается по подтверждённым кошелькам", () => {
+    const wallet = (n: number, stack: number): PlayerSnapshot => ({
+      identity: `wallet:0xabc00000000000000000000000000000000000${String(n).padStart(2, "0")}`,
+      state: off(stack),
+    });
+
+    it("аноним остаётся в общем зачёте, но места в деньгах не занимает", () => {
+      const lb = buildLeaderboard(
+        [{ identity: "dev:anon", state: off(500) }, wallet(1, 100)],
+        NOW,
+        "x",
+      );
+      expect(lb.top[0].kind).toBe("anon");
+      expect(lb.top[0].rank).toBe(1); // в гонке он первый
+      expect(lb.top[0].eligible).toBe(false);
+      expect(lb.top[0].moneyRank).toBeNull(); // но не в деньгах
+      // и первое призовое место достаётся кошельку, стоящему ниже в общем зачёте
+      expect(lb.top[1].moneyRank).toBe(1);
+    });
+
+    it("скрывший адрес получает выплату: адрес есть, наружу просто не отдаётся", () => {
+      const hidden: PlayerSnapshot = {
+        identity: "wallet:0xabc0000000000000000000000000000000000099",
+        state: { ...off(100), hideWallet: true },
+      };
+      const lb = buildLeaderboard([hidden], NOW, "x");
+      expect(lb.top[0].address).toBeNull(); // приватность не нарушена
+      expect(lb.top[0].eligible).toBe(true); // но платить есть куда
+      expect(lb.top[0].moneyRank).toBe(1);
+    });
+
+    it("бот не eligible", () => {
+      const lb = buildLeaderboard([{ identity: "bot:pete", state: off(999) }], NOW, "x");
+      expect(lb.top[0].eligible).toBe(false);
+      expect(lb.top[0].moneyRank).toBeNull();
+    });
+
+    it("нулевой прирост места не занимает — платить за неучастие не за что", () => {
+      const lb = buildLeaderboard([wallet(1, 0), wallet(2, 10)], NOW, "x");
+      expect(lb.top.find((r) => r.stack === 10)!.moneyRank).toBe(1);
+      expect(lb.top.find((r) => r.stack === 0)!.moneyRank).toBeNull();
+    });
+
+    it("призовых мест ровно PAYOUT_SEATS, дальше — вне денег", () => {
+      const many = Array.from({ length: 14 }, (_, i) => wallet(i + 1, 1000 - i));
+      const lb = buildLeaderboard(many, NOW, "x");
+      const seats = lb.top.filter((r) => r.moneyRank !== null);
+      expect(seats).toHaveLength(lb.payoutSeats);
+      expect(seats.at(-1)!.moneyRank).toBe(lb.payoutSeats);
+    });
+
+    /**
+     * Главный случай ради которого расширяется выдача: если верхушку заняли анонимы,
+     * десятое призовое место уезжает ниже десятой строки. Борд, обрезанный по limit,
+     * подсвечивал бы «в деньгах» тех, кому не платят, и прятал тех, кому платят.
+     */
+    it("список дотягивается до последнего призового места, если сверху анонимы", () => {
+      const anons: PlayerSnapshot[] = Array.from({ length: 6 }, (_, i) => ({
+        identity: `dev:anon${i}`,
+        state: off(10_000 - i),
+      }));
+      const wallets = Array.from({ length: 10 }, (_, i) => wallet(i + 1, 1000 - i));
+      const lb = buildLeaderboard([...anons, ...wallets], NOW, "x");
+
+      expect(lb.top).toHaveLength(16); // 6 анонимов + все 10 оплачиваемых мест
+      expect(lb.top.filter((r) => r.moneyRank !== null)).toHaveLength(10);
+      expect(lb.top.at(-1)!.moneyRank).toBe(10); // последнее место в деньгах видно
+    });
+
+    it("выдача не раздувается бесконечно, когда оплачиваемых мест не набирается", () => {
+      const anons: PlayerSnapshot[] = Array.from({ length: 30 }, (_, i) => ({
+        identity: `dev:anon${i}`,
+        state: off(100 - i),
+      }));
+      const lb = buildLeaderboard(anons, NOW, "x");
+      expect(lb.top).toHaveLength(10); // обычный limit, ни строкой больше
+    });
   });
 
   it("живой стек: заводящийся игрок докапывается на момент запроса", () => {

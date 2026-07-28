@@ -24,10 +24,22 @@ import type {
   SetProfileResult,
   Store,
 } from "./store";
+import {
+  addressOf,
+  closedWeekOf,
+  isPayoutEligible,
+  type WeekResultRecord,
+} from "./week-results";
 
 export class FileStore implements Store {
   private data: Record<string, PlayerState> | null = null;
   private file = path.join(process.cwd(), ".data", "players.json");
+  /**
+   * Результаты недель лежат отдельным файлом: `players.json` — это словарь
+   * `identity → PlayerState`, и подмешивать в него записи другой формы значило бы сломать
+   * его схему (её читает `hydrateState` построчно).
+   */
+  private weeksFile = path.join(process.cwd(), ".data", "week-results.json");
   /** Отпечаток файла на момент последнего чтения: несовпадение = копия в памяти устарела. */
   private stamp: string | null = null;
   /**
@@ -125,11 +137,53 @@ export class FileStore implements Store {
   ): Promise<MutateOutcome<R>> {
     return this.withQueue(async () => {
       await this.ensureFresh();
-      const outcome = fn(hydrateState(this.data![identity], now));
+      const before = hydrateState(this.data![identity], now);
+      const outcome = fn(before);
       this.data![identity] = { ...outcome.state };
       await this.persist();
+
+      // Тот же контракт, что и у прод-стора: переход через субботнюю границу фиксирует
+      // результат закрытой недели. В dev это нужно, чтобы петлю «неделя → выплата» можно
+      // было прогнать целиком на GAME_MODE=demo, не поднимая Postgres.
+      const closed = closedWeekOf(before, outcome.state);
+      if (closed) {
+        const all = await this.readWeeks();
+        const i = all.findIndex(
+          (r) => r.weekId === closed.weekId && r.identity === identity,
+        );
+        if (i >= 0) {
+          all[i] = { ...all[i], gain: closed.gain };
+        } else {
+          all.push({
+            weekId: closed.weekId,
+            identity,
+            address: addressOf(identity),
+            gain: closed.gain,
+            rank: null,
+            eligible: isPayoutEligible(identity),
+            share: 0,
+            payoutTx: null,
+          });
+        }
+        await this.writeWeeks(all);
+      }
       return outcome;
     });
+  }
+
+  /** Прочитать результаты недель. Файла нет или он битый → пусто (dev-стор). */
+  private async readWeeks(): Promise<WeekResultRecord[]> {
+    try {
+      const raw = JSON.parse(await fs.readFile(this.weeksFile, "utf8"));
+      return Array.isArray(raw) ? (raw as WeekResultRecord[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeWeeks(all: readonly WeekResultRecord[]): Promise<void> {
+    await fs.mkdir(path.dirname(this.weeksFile), { recursive: true });
+    await fs.writeFile(this.weeksFile, JSON.stringify(all, null, 2));
   }
 
   async snapshot(): Promise<PlayerSnapshot[]> {
@@ -170,6 +224,37 @@ export class FileStore implements Store {
       this.data![identity] = current;
       await this.persist();
       return { ok: true, state: current };
+    });
+  }
+
+  async saveWeekResults(records: readonly WeekResultRecord[]): Promise<number> {
+    if (records.length === 0) return 0;
+    return this.withQueue(async () => {
+      const all = await this.readWeeks();
+      for (const r of records) {
+        const i = all.findIndex(
+          (x) => x.weekId === r.weekId && x.identity === r.identity,
+        );
+        // payoutTx сохраняем прежний, если новый пустой: хеш выплаты вписывается вручную.
+        if (i >= 0) all[i] = { ...r, payoutTx: r.payoutTx ?? all[i].payoutTx };
+        else all.push(r);
+      }
+      await this.writeWeeks(all);
+      return records.length;
+    });
+  }
+
+  async weekResults(weekId: number): Promise<WeekResultRecord[]> {
+    return this.withQueue(async () => {
+      const all = await this.readWeeks();
+      return all
+        .filter((r) => r.weekId === weekId)
+        .sort((a, b) => {
+          if (a.rank !== null && b.rank !== null) return a.rank - b.rank;
+          if (a.rank !== null) return -1;
+          if (b.rank !== null) return 1;
+          return b.gain - a.gain;
+        });
     });
   }
 }

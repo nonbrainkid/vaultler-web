@@ -9,6 +9,7 @@
  * Выбор реализации: если задан DATABASE_URL → Postgres (Prisma), иначе → файловый (dev).
  */
 import type { PlayerState } from "./game";
+import type { WeekResultRecord } from "./week-results";
 
 export interface PlayerSnapshot {
   identity: string;
@@ -65,6 +66,12 @@ export interface Store {
    *
    * `audit` (опц.) вызывается уже с результатом `fn` и возвращает запись журнала либо
    * null, если писать нечего. Строка журнала сохраняется в той же транзакции.
+   *
+   * Здесь же фиксируется РЕЗУЛЬТАТ ЗАВЕРШЁННОЙ НЕДЕЛИ, если `fn` перевела игрока через
+   * субботнюю границу (`closedWeekOf`, lib/week-results.ts). Это делает реализация стора,
+   * а не вызывающий код: через `mutate` проходят все пути записи, и любой новый роут иначе
+   * мог бы «забыть» зафиксировать неделю — ровно та же причина, по которой перевод недели
+   * живёт внутри `settle`, а не в роутах.
    */
   mutate<R>(
     identity: string,
@@ -88,6 +95,18 @@ export interface Store {
     now: number,
     patch: ProfilePatch,
   ): Promise<SetProfileResult>;
+
+  /**
+   * Сохранить результаты недели. Идемпотентно по `(weekId, identity)`: повторный прогон
+   * финализации не задваивает участника и не затирает уже проставленный `payoutTx`
+   * (хеш выплаты вписывается вручную и потерять его нельзя — это доказательство платежа).
+   *
+   * Возвращает число записанных строк.
+   */
+  saveWeekResults(records: readonly WeekResultRecord[]): Promise<number>;
+
+  /** Результаты недели, места сверху вниз; строки вне денег — в конце по приросту. */
+  weekResults(weekId: number): Promise<WeekResultRecord[]>;
 }
 
 let _store: Store | null = null;
