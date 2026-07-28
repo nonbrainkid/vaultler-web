@@ -8,11 +8,13 @@ import { clampHolderLevel, initialState, type PlayerState } from "./game";
 import { nicknameKey } from "./profile";
 import type {
   CrankAudit,
+  LinkTelegramResult,
   MutateOutcome,
   PlayerSnapshot,
   ProfilePatch,
   SetProfileResult,
   Store,
+  TelegramBinding,
 } from "./store";
 import {
   addressOf,
@@ -243,5 +245,66 @@ export class PrismaStore implements Store {
       share: r.share,
       payoutTx: r.payoutTx,
     }));
+  }
+
+  async linkTelegram(identity: string, chatId: number): Promise<LinkTelegramResult> {
+    return prisma.$transaction(async (tx) => {
+      const byIdentity = await tx.telegramLink.findUnique({ where: { identity } });
+      const byChatId = await tx.telegramLink.findUnique({ where: { chatId: BigInt(chatId) } });
+
+      let displacedChatId: number | null = null;
+      if (byIdentity && Number(byIdentity.chatId) !== chatId) {
+        displacedChatId = Number(byIdentity.chatId);
+        await tx.telegramLink.delete({ where: { identity } });
+      }
+      // Тот же chatId уже занят ДРУГИМ identity: 1:1 в обе стороны — освобождаем его
+      // молча. Уведомлять некого отдельно: это тот же физический чат, который сейчас же
+      // получит подтверждение новой привязки.
+      if (byChatId && byChatId.identity !== identity) {
+        await tx.telegramLink.delete({ where: { chatId: BigInt(chatId) } });
+      }
+
+      await tx.telegramLink.upsert({
+        where: { identity },
+        create: { identity, chatId: BigInt(chatId) },
+        update: { chatId: BigInt(chatId) },
+      });
+      return { displacedChatId };
+    });
+  }
+
+  async unlinkTelegramByIdentity(identity: string): Promise<number | null> {
+    try {
+      const row = await prisma.telegramLink.delete({ where: { identity } });
+      return Number(row.chatId);
+    } catch (e) {
+      // P2025 — записи не было. Это не ошибка, а "нечего отвязывать".
+      if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "P2025") {
+        return null;
+      }
+      throw e;
+    }
+  }
+
+  async unlinkTelegramByChatId(chatId: number): Promise<string | null> {
+    try {
+      const row = await prisma.telegramLink.delete({ where: { chatId: BigInt(chatId) } });
+      return row.identity;
+    } catch (e) {
+      if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "P2025") {
+        return null;
+      }
+      throw e;
+    }
+  }
+
+  async telegramChatIdFor(identity: string): Promise<number | null> {
+    const row = await prisma.telegramLink.findUnique({ where: { identity } });
+    return row ? Number(row.chatId) : null;
+  }
+
+  async telegramLinks(): Promise<TelegramBinding[]> {
+    const rows = await prisma.telegramLink.findMany();
+    return rows.map((r) => ({ identity: r.identity, chatId: Number(r.chatId) }));
   }
 }

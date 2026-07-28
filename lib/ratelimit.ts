@@ -34,6 +34,23 @@ const NONCE_LIMIT = 40;
 const PROFILE_LIMIT = 30;
 const WINDOW_MS = 60_000;
 
+/**
+ * Выдача кода привязки Telegram — узкий бюджет per identity. Каждая выдача гасит
+ * предыдущий код и пишет в KV дважды (lib/telegram-link.ts); без лимита страница-жертва
+ * могла бы CSRF-вызовом накрутить лишние записи, а честный игрок случайным
+ * даблклик-спамом — сжечь собственные ещё живые коды один за другим.
+ */
+const TELEGRAM_LINK_LIMIT = 5;
+const TELEGRAM_LINK_WINDOW_MS = 10 * 60_000;
+
+/**
+ * Апдейты вебхука — лимит per chat.id. Основная защита от чужих запросов — секрет
+ * вебхука (lib/telegram.ts); это скорее анти-флуд на случай, если один чат начнёт
+ * заваливать нас командами (в т.ч. чужой скрипт, узнавший chat.id).
+ */
+const TELEGRAM_WEBHOOK_LIMIT = 20;
+const TELEGRAM_WEBHOOK_WINDOW_MS = 60_000;
+
 // ---- Фолбэк: счётчики в памяти процесса ----
 
 function memoryInterval(minIntervalMs: number) {
@@ -73,6 +90,8 @@ const memBoost = memoryInterval(MIN_BOOST_INTERVAL_MS);
 const memAuth = memoryWindow(AUTH_LIMIT, WINDOW_MS);
 const memNonce = memoryWindow(NONCE_LIMIT, WINDOW_MS);
 const memProfile = memoryWindow(PROFILE_LIMIT, WINDOW_MS);
+const memTelegramLink = memoryWindow(TELEGRAM_LINK_LIMIT, TELEGRAM_LINK_WINDOW_MS);
+const memTelegramWebhook = memoryWindow(TELEGRAM_WEBHOOK_LIMIT, TELEGRAM_WEBHOOK_WINDOW_MS);
 
 // ---- Общий стор ----
 
@@ -174,6 +193,34 @@ export function allowProfile(key: string, now: number): Promise<boolean> {
   return guard(
     (kv) => kvWindow(kv, `${PREFIX}:profile:${key}`, PROFILE_LIMIT, WINDOW_MS, now),
     memProfile,
+    key,
+    now,
+  );
+}
+
+/** Выдача/перевыпуск кода привязки Telegram — 5 раз за 10 минут на identity. */
+export function allowTelegramLink(key: string, now: number): Promise<boolean> {
+  return guard(
+    (kv) =>
+      kvWindow(kv, `${PREFIX}:tglink:${key}`, TELEGRAM_LINK_LIMIT, TELEGRAM_LINK_WINDOW_MS, now),
+    memTelegramLink,
+    key,
+    now,
+  );
+}
+
+/** Апдейты вебхука Telegram — 20/мин на chat.id. */
+export function allowTelegramWebhook(key: string, now: number): Promise<boolean> {
+  return guard(
+    (kv) =>
+      kvWindow(
+        kv,
+        `${PREFIX}:tgwh:${key}`,
+        TELEGRAM_WEBHOOK_LIMIT,
+        TELEGRAM_WEBHOOK_WINDOW_MS,
+        now,
+      ),
+    memTelegramWebhook,
     key,
     now,
   );

@@ -169,3 +169,72 @@ describe("файловый стор: свежесть данных между э
     expect((await store.read("dev:a", T0)).streak).toBe(1);
   });
 });
+
+describe("привязка Telegram: 1:1 в обе стороны", () => {
+  it("линкует identity к chatId и находится обратно", async () => {
+    const store = new FileStore();
+    const res = await store.linkTelegram("dev:a", 111, T0);
+    expect(res.displacedChatId).toBeNull();
+    expect(await store.telegramChatIdFor("dev:a")).toBe(111);
+    expect(await store.telegramLinks()).toEqual([{ identity: "dev:a", chatId: 111 }]);
+  });
+
+  it("перепривязка того же identity к новому chatId возвращает старый как displaced", async () => {
+    const store = new FileStore();
+    await store.linkTelegram("dev:a", 111, T0);
+    const res = await store.linkTelegram("dev:a", 222, T0 + 1000);
+    expect(res.displacedChatId).toBe(111);
+    expect(await store.telegramChatIdFor("dev:a")).toBe(222);
+    // Старая запись реально удалена, а не просто добавлена вторая строка.
+    expect(await store.telegramLinks()).toEqual([{ identity: "dev:a", chatId: 222 }]);
+  });
+
+  it("тот же chatId у другого identity тихо освобождается (1:1 по обе стороны)", async () => {
+    const store = new FileStore();
+    await store.linkTelegram("dev:a", 111, T0);
+    const res = await store.linkTelegram("dev:b", 111, T0);
+    expect(res.displacedChatId).toBeNull(); // у dev:b раньше привязки не было
+    expect(await store.telegramChatIdFor("dev:a")).toBeNull(); // старая связь снята
+    expect(await store.telegramChatIdFor("dev:b")).toBe(111);
+  });
+
+  it("повторная привязка того же chatId к тому же identity — не задваивает запись", async () => {
+    const store = new FileStore();
+    await store.linkTelegram("dev:a", 111, T0);
+    const res = await store.linkTelegram("dev:a", 111, T0 + 1000);
+    expect(res.displacedChatId).toBeNull();
+    expect(await store.telegramLinks()).toEqual([{ identity: "dev:a", chatId: 111 }]);
+  });
+
+  it("unlinkTelegramByIdentity удаляет привязку физически и возвращает старый chatId", async () => {
+    const store = new FileStore();
+    await store.linkTelegram("dev:a", 111, T0);
+    expect(await store.unlinkTelegramByIdentity("dev:a")).toBe(111);
+    expect(await store.telegramChatIdFor("dev:a")).toBeNull();
+    expect(await store.telegramLinks()).toEqual([]);
+    // Повторная отписка — не ошибка, просто "нечего отвязывать".
+    expect(await store.unlinkTelegramByIdentity("dev:a")).toBeNull();
+  });
+
+  it("unlinkTelegramByChatId (команда /stop) возвращает identity, если он был", async () => {
+    const store = new FileStore();
+    await store.linkTelegram("wallet:0xabc", 999, T0);
+    expect(await store.unlinkTelegramByChatId(999)).toBe("wallet:0xabc");
+    expect(await store.unlinkTelegramByChatId(999)).toBeNull();
+  });
+
+  it("привязки живут в своём файле, а не внутри players.json", async () => {
+    const store = new FileStore();
+    await store.linkTelegram("dev:a", 111, T0);
+    // players.json не тронут отдельным файлом привязок — схему, которую читает
+    // hydrateState построчно, подмешивание сломало бы.
+    await expect(fs.readFile(file, "utf8")).rejects.toThrow();
+  });
+
+  it("привязка, сделанная одним экземпляром, видна другому без перезапуска", async () => {
+    const writer = new FileStore();
+    const reader = new FileStore();
+    await writer.linkTelegram("dev:a", 111, T0);
+    expect(await reader.telegramChatIdFor("dev:a")).toBe(111);
+  });
+});

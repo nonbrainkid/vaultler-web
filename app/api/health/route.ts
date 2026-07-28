@@ -5,6 +5,7 @@
 import { getStore } from "@/lib/store";
 import { clientIpSource, rateLimitBackend } from "@/lib/ratelimit";
 import { jsonNoStore } from "@/lib/http";
+import { telegramStatus } from "@/lib/telegram";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +47,9 @@ export async function GET(req: Request) {
   // "session" в проде = перед приложением нет прокси, проставляющего доверенный IP:
   // лимиты держатся на cookie, которую атакующий ротирует бесплатно.
   checks.clientIp = clientIpSource(req);
+  // "off" — env не заданы, бот выключен и ничего не ломает; "misconfigured" — часть env
+  // задана, а часть нет (опаснее, чем "off": молчаливая дыра). "on" — можно setWebhook.
+  checks.telegram = telegramStatus();
 
   return jsonNoStore({ ok, checks, ts: Date.now() }, { status: ok ? 200 : 503 });
 }

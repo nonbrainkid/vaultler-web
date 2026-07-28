@@ -47,6 +47,7 @@ const SECRET_PATTERNS = [
   ["строка подключения с паролем", /\b(postgres(ql)?|mysql|mongodb(\+srv)?):\/\/[^\s"'/]+:[^\s"'@]+@/],
   ["приватный ключ EVM (0x + 64 hex)", /\b0x[a-fA-F0-9]{64}\b/],
   ["WalletConnect projectId", /projectId\s*[:=]\s*["'][a-f0-9]{32}["']/],
+  ["Telegram bot token", /\b\d{8,10}:[A-Za-z0-9_-]{35}\b/],
 ];
 
 const commits = git("rev-list", "--all").split("\n").filter(Boolean);

@@ -34,6 +34,22 @@ export interface MutateOutcome<R> {
   result: R;
 }
 
+/** Привязка identity ↔ chatId Telegram-бота напоминаний (спринт 1.1). */
+export interface TelegramBinding {
+  identity: string;
+  chatId: number;
+}
+
+export interface LinkTelegramResult {
+  /**
+   * chatId, который был привязан к этому identity ДО вызова, если он отличался от нового.
+   * `null` — либо это первая привязка, либо новый chatId совпадает со старым.
+   * Вызывающий код обязан уведомить этот чат, что привязка перенесена (docs/brief-engineer.md,
+   * "1:1 в обе стороны... повторная привязка заменяет старую и уведомляет старый чат").
+   */
+  displacedChatId: number | null;
+}
+
 /**
  * Запись журнала кранков. Пишется в ТОЙ ЖЕ транзакции, что и сам стейт: иначе при
  * падении между двумя записями журнал разошёлся бы с тем, что он описывает, и потерял
@@ -107,6 +123,31 @@ export interface Store {
 
   /** Результаты недели, места сверху вниз; строки вне денег — в конце по приросту. */
   weekResults(weekId: number): Promise<WeekResultRecord[]>;
+
+  /**
+   * Связать identity ↔ chatId. Обеспечивает 1:1 в обе стороны: если у identity уже был
+   * ДРУГОЙ chatId — старая запись удаляется (её chatId возвращается в `displacedChatId`);
+   * если этот chatId уже был привязан к ДРУГОМУ identity — та запись тоже удаляется молча
+   * (тот же физический чат сейчас же получит подтверждение новой привязки, отдельно
+   * уведомлять некого — это тот же чат).
+   */
+  linkTelegram(identity: string, chatId: number, now: number): Promise<LinkTelegramResult>;
+
+  /** Отвязать по identity (кнопка на сайте). Возвращает старый chatId, если он был. */
+  unlinkTelegramByIdentity(identity: string): Promise<number | null>;
+
+  /** Отвязать по chatId (команда /stop в боте). Возвращает identity, если он был. */
+  unlinkTelegramByChatId(chatId: number): Promise<string | null>;
+
+  /** Привязан ли этот identity, и к какому chatId. `null` — привязки нет. */
+  telegramChatIdFor(identity: string): Promise<number | null>;
+
+  /**
+   * Все привязки разом — для крона рассылки: он проходит по игрокам (`snapshot`) и должен
+   * дёшево узнать, у кого из них вообще есть chatId, без запроса на каждого игрока по
+   * отдельности.
+   */
+  telegramLinks(): Promise<TelegramBinding[]>;
 }
 
 let _store: Store | null = null;

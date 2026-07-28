@@ -5,6 +5,7 @@ import type { HolderTierView, PublicView } from "@/lib/game";
 import ConnectButton from "./components/ConnectButton";
 import ProfileEditor from "./components/ProfileEditor";
 import SafeSprite from "./components/SafeSprite";
+import TelegramLink from "./components/TelegramLink";
 import {
   RANK_SKINS,
   rankLevel,
@@ -608,6 +609,10 @@ export default function Vault({
               onSaved={refetch}
             />
           )}
+
+          {/* Работает и без кошелька: анонимные сессии — 30 игроков из 34, и именно та
+              аудитория, которую напоминания должны удержать в первую очередь. */}
+          <TelegramLink />
 
           <div className="card rules">
             <h3 className="card-h">THE RULES</h3>

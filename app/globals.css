@@ -1502,6 +1502,21 @@ a.addrlink:focus-visible {
   margin-top: 2px;
 }
 
+/* ---- telegram reminders ---- */
+.tg-code {
+  font-family: var(--read);
+  font-size: 16px;
+  color: var(--bone);
+  background: #0d0904;
+  border: 3px solid var(--wood-darker);
+  padding: 8px 10px;
+  margin: 8px 0;
+  word-break: break-all;
+}
+.tg-check {
+  margin-top: 8px;
+}
+
 /* ───────────── modal ───────────── */
 .modal-back {
   position: fixed;

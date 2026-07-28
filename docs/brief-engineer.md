@@ -227,6 +227,23 @@ cookie-сессии, у которых нет адреса ни на борде,
 
 ## 1.1 — Telegram-бот напоминаний (главная фича продукта)
 
+> **Статус: код готов, осталось развернуть (2026-07-28).** Привязка (одноразовый код →
+> `/start` в приватном чате), вебхук с двойной защитой секретом, рассылка «окно открылось»
+> / «2 часа до рейдера» с идемпотентностью по `(identity, lastCrankAt, kind)`, автоудаление
+> при 403, отписка кнопкой сайта И `/stop`, `chatId` нигде не в API — всё реализовано и
+> покрыто тестами (`lib/telegram*.ts`, `lib/telegram*.test.ts`, `scripts/test-telegram.mjs`).
+>
+> **Планировщик — GitHub Actions, не Vercel Cron**: проект на Hobby, где крон Vercel не
+> чаще раза в сутки — непригодно для двухчасового окна, а более частый `crons` в
+> `vercel.json` на Hobby ломает деплой целиком. `.github/workflows/reminders.yml` дёргает
+> `POST /api/telegram/remind` каждые 10 минут секретом из GitHub Secrets.
+>
+> **Осталось на владельце** (не код, а конфигурация): создать бота в `@BotFather` (username
+> `vaultler_bot` уже зашит в `lib/links.ts` как дефолт), задать
+> `TELEGRAM_BOT_TOKEN`/`TELEGRAM_WEBHOOK_SECRET`/`CRON_SECRET` в Vercel,
+> `npx prisma db push` (новая таблица `TelegramLink`), `npm run telegram:setup`, добавить
+> `CRON_SECRET` в GitHub Secrets. Порядок — docs/deployment.md.
+
 Вся петля держится на том, что человек вспомнит про 12-часовое окно сам, через сутки.
 Данные говорят, что не вспоминает никто. Это не удобство, а математика удержания.
 

@@ -7,6 +7,7 @@ npm test              # vitest run — юнит-тесты чистой логи
 npm run test:watch    # то же в watch
 npm run test:auth     # e2e SIWE против запущенного dev-сервера
 npm run test:boost    # e2e холдерского буста против локального чейна (см. ниже)
+npm run test:telegram  # e2e привязки/вебхука/крона Telegram-бота (см. ниже)
 npm run check:secrets  # аудит секретов (рабочее дерево + вся история git)
 ```
 
@@ -26,6 +27,12 @@ npm run check:secrets  # аудит секретов (рабочее дерев�
 | `lib/leaderboard.test.ts` | недельный отсчёт, сортировка по стеку, сумма общего сейфа, приватность ярлыков (ник / короткий адрес / anon / **скрытый адрес не отдаётся**), отметка «you» и ранг, живой стек |
 | `lib/skins.test.ts` | гейтинг «TOP N открыт только при игроках > N», базовый скин всегда, кейсы 3 / 100 / 500 / 1001 игроков, `nextSkin` ведёт к достижимой ступени |
 | `lib/profile.test.ts` | длина, допустимые символы, резерв-лист, запрет `0x…`, регистронезависимый ключ уникальности |
+| `lib/kv.test.ts` | новые примитивы `setValue`/`getAndDelete` — точная команда Redis (`SET … EX`, `GETDEL`), проброс ошибок |
+| `lib/telegram-link.test.ts` | одноразовость кода (что с KV, что в фолбэке на память), TTL 10 мин, инвалидация при перевыпуске, энтропия кода, `completeLink` (оркестрация + displacedChatId), `toLinkStatusView` **никогда** не содержит `chatId` |
+| `lib/telegram.test.ts` | фича «за флагом» (все три env разом или `off`/`misconfigured`), `verifyWebhookSecret`/`verifyCronSecret`, `sendTelegramMessage` (успех / 403 → `blocked` / 429 → `retryAfterSec` / сетевая ошибка не бросает), `webhookUrl` |
+| `lib/telegram-remind.test.ts` | `dueReminders` только на фазе `ready` (не `winding`, не `stall`), порог `raid_warning`, игрок без привязки пропускается, идемпотентность `reserveReminder` по `(identity, lastCrankAt, kind)`, `runReminders` — сдвоенный тик не шлёт дважды, 403 автоматически отвязывает |
+| `lib/telegram-copy.test.ts` | гардрейлы копирайтинга (без APY/deposit/stake/earn), обязательная строка «бот ничего не просит» в проактивных сообщениях, ссылка на канонический домен |
+| `lib/store-file.test.ts` (доп.) | привязка Telegram 1:1 в обе стороны (перепривязка того же identity, перехват chatId другим identity), физическое удаление при отписке, отдельный файл от `players.json`, свежесть между экземплярами |
 
 Тесты гоняются в **прод-таймингах** (`GAME_MODE` в тест-окружении не выставлен) —
 проверяется то, что поедет в прод, а не демо-режим.
@@ -47,6 +54,24 @@ BASE=http://localhost:3005 npm run test:auth    # другой порт
 - **`scripts/test-profile.mjs`** — сквозной профиль: 403 для анонима, установка ника,
   `nickname_taken`, невалидные значения, резерв-лист, приватность адреса в борде
   и отдельный кейс на **гонку за ник** (два клиента разом).
+- **`scripts/test-telegram.mjs`** — сквозной Telegram-бот: код → симулированный вебхук
+  `/start` → привязан → `/stop` → отвязан; приватность (групповой чат не привязывается,
+  `chatId` нигде в ответах); 1:1 в обе стороны (перехват chatId другим identity гасит
+  старую привязку); отписка кнопкой сайта; секрет вебхука (путь **и** заголовок, оба
+  обязаны сойтись — иначе `404`); CSRF на `POST /api/telegram/link`/`unlink`; рейт-лимит
+  выдачи кода; секрет крона рассылки. Реальных сообщений в Telegram не проверяет и не
+  требует настоящего токена бота — `sendTelegramMessage` не бросает исключений даже с
+  фиктивным токеном, а вся логика привязки идёт через стор, а не через сеть:
+
+  ```bash
+  TELEGRAM_BOT_TOKEN=123456789:test-fake-token-not-real \
+  TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32) \
+  CRON_SECRET=$(openssl rand -hex 24) \
+    npm run dev
+
+  # в другом терминале, с ТЕМИ ЖЕ TELEGRAM_WEBHOOK_SECRET/CRON_SECRET в окружении:
+  npm run test:telegram
+  ```
 
 ### Буст против настоящего чейна (`scripts/test-boost.mjs`)
 

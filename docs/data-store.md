@@ -25,6 +25,9 @@ DATABASE_URL пуст, prod   → падаем с внятной ошибкой
 | `setProfile(identity, now, patch)` | ник + приватность, с проверкой уникальности | глобальная сериализация |
 | `saveWeekResults(records)` | результаты завершённой недели | одна транзакция на всю неделю |
 | `weekResults(weekId)` | кто и с каким местом закончил неделю | нет |
+| `linkTelegram(identity, chatId, now)` | привязать identity ↔ chatId бота напоминаний, 1:1 в обе стороны | транзакция (Prisma) / очередь (файл) |
+| `unlinkTelegramByIdentity` / `unlinkTelegramByChatId` | физически удалить привязку (кнопка сайта / `/stop`) | да |
+| `telegramChatIdFor(identity)` / `telegramLinks()` | своя привязка / все привязки (для крона рассылки) | нет |
 
 ### Результаты недели фиксирует сам `mutate`
 
@@ -99,6 +102,14 @@ model Player {
   updatedAt    DateTime @updatedAt
   crankLogs    CrankLog[]
   @@index([stack])                // сортировка борда
+}
+
+model TelegramLink {               // identity ↔ chatId бота напоминаний (спринт 1.1)
+  id       String  @id @default(cuid())
+  identity String  @unique          // internal id; наружу НЕ отдаётся никогда
+  chatId   BigInt  @unique          // единственное персональное поле — не username/имя/язык
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model CrankLog {                  // аудит кранков: анти-чит и разбор споров
@@ -190,6 +201,11 @@ store.mutate(identity, now, fn, (outcome) => CrankAudit | null)
 `.data/players.json` — dev-персист, **в `.gitignore`** и в списке запретных файлов
 аудита секретов. Файловый стор кэширует данные в памяти: после ручной правки файла
 или сидинга ботов dev-сервер надо перезапустить.
+
+`.data/telegram-links.json` — привязки Telegram, отдельным файлом (тоже в `.gitignore`):
+подмешивать их в `players.json` сломало бы схему, которую построчно читает `hydrateState`.
+В отличие от игрового стейта, читается заново на КАЖДОЙ операции (без кэша в памяти) —
+привязки делаются редко, а свежесть важнее одного лишнего `stat`.
 
 ## Известные ограничения
 

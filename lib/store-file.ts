@@ -18,11 +18,13 @@ import { hydrateState, type PlayerState } from "./game";
 import { nicknameKey } from "./profile";
 import type {
   CrankAudit,
+  LinkTelegramResult,
   MutateOutcome,
   PlayerSnapshot,
   ProfilePatch,
   SetProfileResult,
   Store,
+  TelegramBinding,
 } from "./store";
 import {
   addressOf,
@@ -40,6 +42,11 @@ export class FileStore implements Store {
    * его схему (её читает `hydrateState` построчно).
    */
   private weeksFile = path.join(process.cwd(), ".data", "week-results.json");
+  /**
+   * Привязки Telegram — тоже отдельный файл: это не PlayerState, и подмешивать их в
+   * players.json сломало бы схему, которую построчно читает hydrateState.
+   */
+  private telegramFile = path.join(process.cwd(), ".data", "telegram-links.json");
   /** Отпечаток файла на момент последнего чтения: несовпадение = копия в памяти устарела. */
   private stamp: string | null = null;
   /**
@@ -256,5 +263,73 @@ export class FileStore implements Store {
           return b.gain - a.gain;
         });
     });
+  }
+
+  /** Прочитать привязки Telegram. Файла нет/битый → пусто (dev-стор). */
+  private async readTelegramLinks(): Promise<TelegramBinding[]> {
+    try {
+      const raw = JSON.parse(await fs.readFile(this.telegramFile, "utf8"));
+      return Array.isArray(raw) ? (raw as TelegramBinding[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeTelegramLinks(all: readonly TelegramBinding[]): Promise<void> {
+    await fs.mkdir(path.dirname(this.telegramFile), { recursive: true });
+    await fs.writeFile(this.telegramFile, JSON.stringify(all, null, 2));
+  }
+
+  async linkTelegram(identity: string, chatId: number): Promise<LinkTelegramResult> {
+    return this.withQueue(async () => {
+      const all = await this.readTelegramLinks();
+      let displacedChatId: number | null = null;
+      const next: TelegramBinding[] = [];
+      for (const r of all) {
+        if (r.identity === identity) {
+          // Тот же identity перепривязывается — если chatId правда другой, старый чат
+          // получит уведомление о переносе (решает вызывающий код в роуте).
+          if (r.chatId !== chatId) displacedChatId = r.chatId;
+          continue;
+        }
+        // Этот же chatId был занят ДРУГИМ identity — 1:1 по обе стороны, освобождаем.
+        if (r.chatId === chatId) continue;
+        next.push(r);
+      }
+      next.push({ identity, chatId });
+      await this.writeTelegramLinks(next);
+      return { displacedChatId };
+    });
+  }
+
+  async unlinkTelegramByIdentity(identity: string): Promise<number | null> {
+    return this.withQueue(async () => {
+      const all = await this.readTelegramLinks();
+      const found = all.find((r) => r.identity === identity);
+      if (!found) return null;
+      await this.writeTelegramLinks(all.filter((r) => r.identity !== identity));
+      return found.chatId;
+    });
+  }
+
+  async unlinkTelegramByChatId(chatId: number): Promise<string | null> {
+    return this.withQueue(async () => {
+      const all = await this.readTelegramLinks();
+      const found = all.find((r) => r.chatId === chatId);
+      if (!found) return null;
+      await this.writeTelegramLinks(all.filter((r) => r.chatId !== chatId));
+      return found.identity;
+    });
+  }
+
+  async telegramChatIdFor(identity: string): Promise<number | null> {
+    return this.withQueue(async () => {
+      const all = await this.readTelegramLinks();
+      return all.find((r) => r.identity === identity)?.chatId ?? null;
+    });
+  }
+
+  async telegramLinks(): Promise<TelegramBinding[]> {
+    return this.withQueue(async () => (await this.readTelegramLinks()).map((r) => ({ ...r })));
   }
 }

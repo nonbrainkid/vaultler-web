@@ -15,7 +15,9 @@
     "close:week": "node scripts/close-week.mjs",
     "test:auth": "node scripts/test-auth.mjs",
     "test:profile": "node scripts/test-profile.mjs",
-    "test:boost": "node scripts/test-boost.mjs"
+    "test:boost": "node scripts/test-boost.mjs",
+    "test:telegram": "node scripts/test-telegram.mjs",
+    "telegram:setup": "node scripts/telegram-setup.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

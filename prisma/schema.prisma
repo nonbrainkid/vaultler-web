@@ -82,6 +82,27 @@ model WeekResult {
   @@index([weekId, rank])
 }
 
+// Привязка identity к чату Telegram-бота напоминаний (спринт 1.1, docs/brief-engineer.md).
+//
+// Единственное персональное поле — chatId: username, имя, телефон и язык НЕ храним
+// намеренно (docs/security.md → приватность). chatId наружу не отдаётся ни одним API —
+// тот же инвариант, что и для internal id (`wallet:0x…`, `dev:uuid`), см. docs/api.md.
+//
+// 1:1 в обе стороны (оба поля @unique): один identity — один chatId и обратно. Повторная
+// привязка заменяет старую запись — старому чату уходит уведомление, что бот переехал
+// (lib/telegram-link.ts), иначе человек продолжал бы получать напоминания в мёртвый чат.
+model TelegramLink {
+  id        String   @id @default(cuid())
+  // Internal id (wallet:0x… | dev:uuid). Анонимные сессии привязывать МОЖНО и НУЖНО —
+  // это 30 игроков из 34 и ровно та аудитория, которую удержание должно зацепить первой.
+  identity  String   @unique
+  // BigInt, как lastCrankAt: chat.id у приватных чатов помещается в JS Number без потерь,
+  // но формат согласован с остальной схемой (см. store-prisma.ts → toState/toWrite).
+  chatId    BigInt   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // Аудит кранков — для анти-чита и разбора спорных ситуаций («у меня было больше стека»).
 // Пишется в той же транзакции, что и стейт игрока (lib/store-prisma.ts), иначе журнал
 // мог бы разойтись с тем, что он описывает.

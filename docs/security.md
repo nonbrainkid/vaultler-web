@@ -27,6 +27,15 @@
 | спор «у меня было больше стека» | журнал успешных кранков в одной транзакции со стейтом | `CrankLog`, `lib/store-prisma.ts` |
 | утечка секретов в git | аудит рабочего дерева **и всей истории** в pre-push | `scripts/check-secrets.mjs` |
 | деанонимизация игрока | адрес не отдаётся, если скрыт; internal id не отдаётся никогда | `lib/leaderboard.ts` |
+| подделка апдейтов Telegram-бота (захват чужого chatId) | секрет в пути URL **и** заголовок `X-Telegram-Bot-Api-Secret-Token`, оба через `timingSafeEqual`; несовпадение → 404 | `lib/telegram.ts`, `app/api/telegram/webhook/[secret]/route.ts` |
+| повторная доставка апдейта (ретрай Telegram) удваивает эффект | дедуп по `update_id` в KV/памяти, TTL 24ч | `app/api/telegram/webhook/[secret]/route.ts` |
+| перебор/подсматривание одноразового кода привязки | 128 бит энтропии, хранится ТОЛЬКО как SHA-256-хеш, `GETDEL` — строго одноразовый, TTL 10 мин | `lib/telegram-link.ts` |
+| захват чужого аккаунта через привязку бота | код выдаётся только владельцу активной сессии (`resolveIdentity`), привязка 1:1 в обе стороны | `lib/telegram-link.ts`, `lib/store-prisma.ts` |
+| бот кранкает за игрока / фармит стрики | ни один путь бота не вызывает `store.mutate` — только `store.read`/`snapshot` + `settle()` в памяти | `app/api/telegram/remind/route.ts` |
+| задвоенная рассылка при ретрае/сдвиге крона | идемпотентность по `(identity, lastCrankAt, kind)` | `lib/telegram-remind.ts` |
+| бесконечная долбёжка в заблокировавшего бота игрока | автоудаление привязки на 403 "bot was blocked by the user" | `lib/telegram-remind.ts`, `lib/telegram.ts` |
+| подмена ссылки на бота (фишинг под "официального") | username бота — одна константа `TELEGRAM_BOT_USERNAME` (`lib/links.ts`) и для сайта, и для deep link | `lib/links.ts`, `app/components/TelegramLink.tsx` |
+| накопление персональных данных через бота | хранится только `chatId`; username/имя/язык не сохраняются никогда | `prisma/schema.prisma` → `TelegramLink` |
 
 Жирным отмечено закрытое аудитом от 2026-07-25 (разбор — в `NOTES.md`).
 
@@ -141,6 +150,10 @@ git config core.hooksPath .githooks   # один раз после клона �
    `bad_signature` или `bad_origin` — это сигнал атаки, и его никто не увидит.
 8. **Пересмотреть `connect-src https: wss:`**, когда станет известен реальный RPC-хост:
    сузить до конкретных origin, чтобы при XSS данные некуда было выгружать.
+9. **Задать `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` / `CRON_SECRET`**, вызвать
+   `setWebhook` (`npm run telegram:setup`) и включить workflow
+   `.github/workflows/reminders.yml` (нужен `CRON_SECRET` в GitHub Secrets репозитория) —
+   без этого бот выключен целиком (`/api/health` → `telegram: "off"`).
 
 ## Известные issues (не наш код)
 

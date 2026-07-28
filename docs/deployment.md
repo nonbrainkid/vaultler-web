@@ -18,8 +18,11 @@
 | `BOARD_EXCLUDE` | пусто | адреса кошельков команды через запятую: играют как все, но вырезаются из борда, счётчика игроков и общего сейфа. Выплаты делаются руками по борду, поэтому «нет в борде» = «не получает» |
 | `TRUST_PROXY_XFF` | **не выставлять** | только самохостинг за прокси, перезаписывающим `X-Forwarded-For`. На Vercel доверенный IP берётся из `x-vercel-forwarded-for` |
 | `ADMIN_SECRET` | **обязательна до первой выплаты** (≥16 симв.) | секрет для `POST /api/admin/close-week` — финализации недели. Пусто → роут отвечает 503. Денег роут не отправляет, только считает список |
-| `KV_REST_API_URL` | до реальных призов | Redis для rate-limit. Vercel KV подставляет сам при привязке стора |
+| `KV_REST_API_URL` | до реальных призов | Redis для rate-limit (и для одноразовых кодов Telegram / дедупа рассылки, см. ниже). Vercel KV подставляет сам при привязке стора |
 | `KV_REST_API_TOKEN` | до реальных призов | токен к нему. Альтернатива — пара `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` |
+| `TELEGRAM_BOT_TOKEN` | нужна, чтобы включить бота | токен из @BotFather. Формат `\d{8,10}:[A-Za-z0-9_-]{35}` — под этот паттерн настроен `check:secrets` |
+| `TELEGRAM_WEBHOOK_SECRET` | нужна, чтобы включить бота (≥32 симв.) | ГЛАВНЫЙ контроль вебхука: сегмент пути `/api/telegram/webhook/<secret>` **и** значение `secret_token` в `setWebhook` — Telegram прикладывает его заголовком на каждый апдейт, роут сверяет через `timingSafeEqual`. `openssl rand -hex 32` |
+| `CRON_SECRET` | нужна, чтобы включить бота (≥16 симв.) | секрет `POST /api/telegram/remind` (`Authorization: Bearer`). То же значение кладётся в GitHub Secrets репозитория для workflow-рассылки (см. ниже) |
 | `GAME_MODE` | **не выставлять** | `demo` → сжатые тайминги 30с/15с |
 | `DEV_FORCE_BOOST` | **не выставлять** | `1` → буст включён принудительно (тест пути буста) |
 
@@ -39,6 +42,7 @@
 | `NEXT_PUBLIC_VLTR_DECIMALS` | `18` | десятичные |
 | `NEXT_PUBLIC_VLTR_BOOST_MIN` | `1` | абсолютный анти-дуст-минимум. Сам множитель задаётся долей в эмиссии (`HOLDER_TIERS`), см. `docs/game-mechanics.md` |
 | `NEXT_PUBLIC_WC_PROJECT_ID` | пусто | WalletConnect (опционально) |
+| `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` | `vaultler_bot` (в коде, `lib/links.ts`) | переопределение username бота. Дефолт — публичный факт в git, тем же способом, что и адрес контракта $VLTR (`lib/chain.ts`); задавать здесь нужно только для тестового бота (dev/staging) |
 
 Без сетевых значений сайт полностью играбелен — просто буст не активируется.
 
@@ -120,6 +124,55 @@ CREATE INDEX IF NOT EXISTS "WeekResult_weekId_rank_idx"
 ADMIN_SECRET=... VAULTLER_URL=https://thevaultler.fun npm run close:week -- --dry
 ```
 
+## Telegram-бот напоминаний (спринт 1.1)
+
+Модель безопасности и карта кода — `docs/security.md` (таблица угроз) и
+`docs/api.md` (`/api/telegram/*`). Здесь — только порядок запуска.
+
+**Схема хранения identity ↔ chatId** — новая модель `TelegramLink` в
+`prisma/schema.prisma` (`identity` и `chatId` оба `@unique`). Миграция **подготовлена, но
+не применена** — прод-`prisma db push` делает владелец, как и раньше (см. предупреждение
+выше про порядок «миграция → код»). Локальный файловый стор работает без БД
+(`.data/telegram-links.json`, в `.gitignore`).
+
+**Почему рассылка НЕ на Vercel Cron.** Проект на плане **Hobby**: там крон-задания
+Vercel ограничены **разом в сутки**, с точностью ±59 минут — окно «2 часа до рейдера»
+на суточном тике не попадёт в цель вообще. Хуже: более частое расписание в `crons`
+`vercel.json` на Hobby **не просто не работает, а роняет весь деплой** с ошибкой
+`Hobby accounts are limited to daily cron jobs`. Поэтому планировщик —
+**GitHub Actions** (`.github/workflows/reminders.yml`, cron `*/10 * * * *`), который
+делает один `curl -X POST` на `POST /api/telegram/remind` с секретом из GitHub Secrets.
+Переезд на нативный Vercel Cron возможен **только после апгрейда проекта на Pro** — тогда
+`vercel.json` с `crons` можно завести снова.
+
+GitHub Actions тоже не гарантирует точный тик (под нагрузкой сдвиг 10–20 минут — обычное
+дело), поэтому роут выбирает всех, у кого нужное событие уже наступило, а не полагается на
+момент вызова — и именно поэтому идемпотентность рассылки по
+`(identity, lastCrankAt, kind)` не опция, а обязательное условие (`lib/telegram-remind.ts`).
+
+**Порядок запуска:**
+
+1. Создать бота в `@BotFather` (аккаунт владельца — не автоматизируется) → получить
+   `TELEGRAM_BOT_TOKEN`. Записать реальный `username` бота: если он отличается от
+   `vaultler_bot`, захардкоженного в `lib/links.ts` как дефолт, переопределить через
+   `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` (или обновить дефолт в коде, если это постоянное
+   имя, — тем же способом, что и адрес контракта $VLTR).
+2. Сгенерировать `TELEGRAM_WEBHOOK_SECRET` (`openssl rand -hex 32`) и `CRON_SECRET`
+   (`openssl rand -base64 32`).
+3. Выставить все три переменные в env Vercel (+ `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`, если
+   username отличается от дефолта) и передеплоить.
+4. Прод-`DATABASE_URL` в окружении → `npx prisma db push` (создаёт таблицу
+   `TelegramLink`, аддитивно).
+5. Зарегистрировать вебхук: `TELEGRAM_BOT_TOKEN=… TELEGRAM_WEBHOOK_SECRET=… npm run
+   telegram:setup -- https://thevaultler.fun` (обёртка над `setWebhook`, `lib/telegram.ts`).
+6. Добавить `CRON_SECRET` в GitHub Secrets репозитория (Settings → Secrets and
+   variables → Actions) — то же значение, что и в env Vercel. Workflow
+   `.github/workflows/reminders.yml` подхватит его автоматически на следующем тике
+   (можно проверить вручную из вкладки Actions → Run workflow).
+7. Проверка: `/api/health` → `telegram: "on"`; `curl -X POST
+   https://thevaultler.fun/api/telegram/remind -H "authorization: Bearer $CRON_SECRET"`
+   отвечает `200 {"ok":true,...}`.
+
 ## Runbook: Vercel
 
 1. **Проект.** Vercel → Add New → Project → импортировать репозиторий. Framework
@@ -177,6 +230,18 @@ ADMIN_SECRET=... VAULTLER_URL=https://thevaultler.fun npm run close:week -- --dr
 - [ ] Баланс прода (`BASE_RATE_PER_SEC`, пороги тиров) откалиброван — сейчас плейсхолдеры.
 - [ ] Политика выплат пула зафиксирована (реальные токены, вручную — решение за Егором).
 - [ ] `npm run check:secrets` пройден (запускается и автоматически в pre-push).
+
+**Чтобы включить Telegram-напоминания (спринт 1.1):**
+
+- [ ] Бот создан в `@BotFather`, `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` /
+      `CRON_SECRET` заданы в env Vercel.
+- [ ] `npx prisma db push` выполнен ПОСЛЕ добавления `TelegramLink` в схему (аддитивно).
+- [ ] `npm run telegram:setup -- https://thevaultler.fun` отработал успешно (`setWebhook`).
+- [ ] `CRON_SECRET` добавлен в GitHub Secrets репозитория, workflow
+      `.github/workflows/reminders.yml` включён (виден во вкладке Actions).
+- [ ] `/api/health` → `telegram: "on"`.
+- [ ] `node scripts/test-telegram.mjs` пройден против прод-подобного стенда (см.
+      docs/testing.md) — не запускать против настоящего прод-бота с реальными игроками.
 
 ## Локальный запуск
 

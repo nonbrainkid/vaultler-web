@@ -40,6 +40,17 @@ export interface Kv {
    * Возвращает новое значение счётчика.
    */
   bumpCounter(key: string, ttlSec: number): Promise<number>;
+  /** `SET key value EX ttl` — записать значение с истечением срока. */
+  setValue(key: string, value: string, ttlSec: number): Promise<void>;
+  /**
+   * `GETDEL key` — атомарно прочитать и удалить значение одной командой.
+   *
+   * Нужен для одноразовых кодов привязки Telegram (lib/telegram-link.ts): код должен
+   * сработать РОВНО один раз. Раздельные GET+DEL оставляли бы окно гонки, в которое два
+   * почти одновременных запроса оба прочитали бы код как валидный, — GETDEL закрывает
+   * его на уровне самого Redis, а не в нашем коде.
+   */
+  getAndDelete(key: string): Promise<string | null>;
 }
 
 type RedisReply = { result?: unknown; error?: string };
@@ -87,6 +98,17 @@ class RestKv implements Kv {
     const n = Number(raw[0].result);
     if (!Number.isFinite(n)) throw new Error("kv: INCR вернул не число");
     return n;
+  }
+
+  async setValue(key: string, value: string, ttlSec: number): Promise<void> {
+    const raw = (await post(this.cfg, "/", ["SET", key, value, "EX", String(ttlSec)])) as RedisReply;
+    if (raw.error) throw new Error(`kv: ${raw.error}`);
+  }
+
+  async getAndDelete(key: string): Promise<string | null> {
+    const raw = (await post(this.cfg, "/", ["GETDEL", key])) as RedisReply;
+    if (raw.error) throw new Error(`kv: ${raw.error}`);
+    return typeof raw.result === "string" ? raw.result : null;
   }
 }
 

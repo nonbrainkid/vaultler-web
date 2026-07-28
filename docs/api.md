@@ -14,7 +14,14 @@
 - все ответы идут с `cache-control: private, no-store` и `vary: cookie` — они
   персональные и не должны оседать в общих кэшах;
 - ответы не содержат internal id (`dev:uuid`, `wallet:0x…`) — наружу идёт только адрес,
-  и только если игрок не скрыл кошелёк.
+  и только если игрок не скрыл кошелёк;
+- ответы `/api/telegram/*` не содержат `chatId` ни при каких условиях — тот же инвариант,
+  распространённый на привязку бота (`toLinkStatusView`, `lib/telegram-link.ts`).
+- **исключение по origin**: `POST /api/telegram/webhook/[secret]` НЕ проверяет
+  `sameOriginOk` — запрос приходит от Telegram, а не из браузера, у него нет `Origin` в
+  принципе. Аутентификация там идёт секретом в пути и в заголовке
+  `X-Telegram-Bot-Api-Secret-Token` (см. ниже). Это единственное, явно
+  прокомментированное в коде исключение — `sameOriginOk()` в `lib/http.ts` не менялся.
 
 ---
 
@@ -245,6 +252,97 @@ curl -X POST https://thevaultler.fun/api/admin/close-week \
 
 Наружу отдаются только адреса: internal id (`wallet:0x…`) не уходит даже админскому
 клиенту, чтобы формат идентичности не расползался по скриптам и логам.
+
+## `GET /api/telegram/link`
+
+Статус привязки Telegram-напоминаний текущей сессии (аноним или кошелёк — оба варианта
+поддерживаются одинаково). Фича за флагом: без `TELEGRAM_BOT_TOKEN` +
+`TELEGRAM_WEBHOOK_SECRET` + `CRON_SECRET` разом отвечает `configured: false`, ничего не
+падает (docs/deployment.md).
+
+```jsonc
+{ "configured": true, "linked": false }
+```
+
+`chatId` не отдаётся НИКОГДА, даже владельцу привязки — только производный `linked`
+(тот же инвариант 5, что и для `wallet:0x…`/`dev:uuid`). Покрыто `lib/telegram-link.test.ts`
+(`toLinkStatusView`).
+
+## `POST /api/telegram/link`
+
+Выдать одноразовый код привязки владельцу текущей сессии. Сама привязка происходит
+НЕ здесь, а когда игрок отправляет боту `/start <код>` — см. вебхук ниже.
+
+```jsonc
+{ "ok": true, "code": "a1b2…(32 hex)", "expiresInSec": 600 }
+```
+
+Username бота в ответе не передаётся: клиент собирает deep link из константы
+`TELEGRAM_BOT_USERNAME` (`lib/links.ts`) — той же, что и ссылка «REMINDER BOT» в шапке
+сайта, чтобы обе никогда не разошлись.
+
+| Код | `error` | Причина |
+|---|---|---|
+| 403 | `bad_origin` | запрос с чужого origin |
+| 429 | `rate_limited` | `allowTelegramLink`, 5 / 10 мин на identity |
+| 503 | `not_configured` | бот выключен (не заданы все три env) |
+
+## `POST /api/telegram/unlink`
+
+Кнопка отписки на сайте. Физически удаляет привязку (не флаг) — тот же метод стора, что
+и команда `/stop` в боте. Идемпотентно: без активной привязки просто отвечает `linked: false`.
+
+```jsonc
+{ "ok": true, "linked": false }
+```
+
+## `POST /api/telegram/webhook/[secret]`
+
+Приём апдейтов от Telegram. Самое уязвимое место всей фичи (docs/brief-engineer.md) —
+защищено ДВОЙНО: случайный секрет в самом пути **и** заголовок
+`X-Telegram-Bot-Api-Secret-Token`, сверяемый с тем же секретом через `timingSafeEqual`.
+Несовпадение любого из двух → `404` (не `401`/`403` — код ответа не должен подсказывать,
+что путь угадан почти верно).
+
+Инвариант 8 (`sameOriginOk` на каждом POST) здесь осознанно не применяется: у запроса от
+Telegram нет `Origin` — аутентификация идёт секретом, а не происхождением (см. комментарий
+в самом роуте).
+
+Команды: `/start <код>` (привязка, только из приватного чата — иначе игровые данные
+поехали бы в чужую группу), `/stop` (отписка). Дедуп по `update_id` — повторная доставка
+одного и того же апдейта (Telegram ретраит) не обрабатывается дважды. Ответ всегда `200`,
+если тело в принципе распарсилось, — Telegram не должен ретраить из-за бизнес-логики
+(неверный код, чужая группа и т.п.).
+
+## `POST /api/telegram/remind`
+
+Рассылка напоминаний «окно открылось» / «2 часа до рейдера». Триггерится расписанием
+**GitHub Actions** (`.github/workflows/reminders.yml`), не Vercel Cron: план Hobby
+ограничивает крон Vercel разом в сутки — непригодно для двухчасового окна, а более частое
+расписание в `vercel.json` на Hobby ломает сам деплой (докладная — docs/deployment.md).
+
+Защита — `Authorization: Bearer <CRON_SECRET>`, сверяется `timingSafeEqual` (тот же
+паттерн, что `close-week`).
+
+```bash
+curl -X POST https://thevaultler.fun/api/telegram/remind \
+  -H "authorization: Bearer $CRON_SECRET"
+```
+
+```jsonc
+{ "ok": true, "due": 4, "sent": 3, "skippedDuplicate": 1, "unlinkedBlocked": 0, "failed": 0 }
+```
+
+Момент считается ТОЛЬКО из серверного стейта (`lastCrankAt` + тайминги `lib/game.ts`),
+`settle()` — только в памяти, ни одного `store.mutate` в этом роуте нет: бот не мутирует
+игровой стейт. Идемпотентность — `(identity, lastCrankAt, kind)`, поэтому повторный или
+запоздавший тик планировщика не задваивает сообщение. `unlinkedBlocked` — сколько привязок
+удалено автоматически из-за 403 «bot was blocked by the user».
+
+| Код | `error` | Причина |
+|---|---|---|
+| 401 | `unauthorized` | нет или неверный `Bearer`-секрет |
+| 503 | `not_configured` | бот выключен |
 
 ## Чего в API нет (и почему)
 

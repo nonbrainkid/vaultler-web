@@ -47,6 +47,8 @@ GET /api/leaderboard (8с)                           lib/vltr.ts → RPC        
 | кошелёк → сервер | SIWE: домен, nonce, срок, подпись | `app/api/auth/verify/route.ts` |
 | сервер → блокчейн | только чтение публичного баланса, транзакций нет | `lib/vltr.ts` |
 | сервер → браузер | наружу не уходят internal id (`dev:…`, `wallet:0x…`) и адрес скрывшего игрока | `lib/leaderboard.ts` |
+| Telegram → сервер | секрет в пути URL **и** в заголовке `X-Telegram-Bot-Api-Secret-Token` (не `Origin` — у вебхука его нет) | `lib/telegram.ts`, `app/api/telegram/webhook/[secret]/route.ts` |
+| сервер → браузер (бот) | `chatId` не отдаётся ни в одном ответе API | `lib/telegram-link.ts` |
 
 ## Поток данных: типовые сценарии
 
@@ -67,6 +69,14 @@ GET /api/leaderboard (8с)                           lib/vltr.ts → RPC        
 SIWE-сообщение и подписывает → `POST /api/auth/verify` → идентичность становится
 `wallet:0x…`, сервер сам читает баланс $VLTR и ставит `boost`.
 
+**Привязка Telegram.** `POST /api/telegram/link` выдаёт одноразовый код владельцу
+текущей сессии → игрок отправляет боту `/start <код>` → Telegram шлёт апдейт на
+`POST /api/telegram/webhook/[secret]` → роут гасит код (`consumeLinkCode`) и связывает
+`identity ↔ chatId` (`store.linkTelegram`). Рассылка — отдельный путь: GitHub Actions по
+расписанию дёргает `POST /api/telegram/remind`, который читает `snapshot()` +
+`telegramLinks()`, считает `settle()` ТОЛЬКО в памяти (как борд) и решает, кому что
+написать — ни один из путей не трогает `store.mutate`, бот не может кранкать.
+
 ## Карта файлов
 
 ```
@@ -79,6 +89,7 @@ app/
   Leaderboard.tsx         недельный борд + общий сейф
   components/             лендинг-секции, ConnectButton, SafeSprite, ProfileEditor
   api/                    state · crank · leaderboard · profile · auth/* · boost/refresh · health
+                          telegram/link · telegram/unlink · telegram/webhook/[secret] · telegram/remind
   error.tsx global-error.tsx not-found.tsx      границы ошибок
   icon.tsx apple-icon.tsx opengraph-image.tsx manifest.ts robots.ts sitemap.ts
 lib/
@@ -95,9 +106,13 @@ lib/
   ratelimit.ts            лимиты эндпоинтов: общий стор, фолбэк в память процесса
   kv.ts                   REST-клиент Redis (Vercel KV / Upstash), null если не настроен
   chain.ts vltr.ts wagmi.ts   сеть, чтение баланса, конфиг коннекторов
-  links.ts                внешние ссылки (заглушки с «soon»)
+  links.ts                внешние ссылки (заглушки с «soon») + TELEGRAM_BOT_USERNAME
+  telegram.ts             Bot API клиент, секреты вебхука/крона, статус фичи
+  telegram-link.ts        одноразовый код привязки (KV, фолбэк в память), completeLink
+  telegram-remind.ts      dueReminders (чистая), идемпотентность, прогон рассылки
+  telegram-copy.ts        тексты сообщений бота
 proxy.ts                  сессия + CSP с nonce
-prisma/schema.prisma      Player, CrankLog
+prisma/schema.prisma      Player, CrankLog, WeekResult, TelegramLink
 scripts/                  check-secrets · seed-bots · test-auth · test-profile · render-*
 reference/                HTML-прототип механики (эталон петли, не эталон визуала)
 ```
