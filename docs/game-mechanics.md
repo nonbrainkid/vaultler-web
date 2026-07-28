@@ -145,7 +145,9 @@ UI рисовал прогресс до следующей ступени без
 
 `toPublicView(state, now)` (что уходит клиенту) — производные для UI: `multiplier`,
 `ratePerSec`, `phase`, тир и следующий порог, `phaseEndsInMs`, `boost` (тир > 0),
-`holder`/`nextHolder`/`holderSharePct`, `serverNow`.
+`holder`/`nextHolder`/`holderSharePct`, `raidPreview` (`{ pct, amount }` — сколько стека
+заберёт рейдер при простое прямо сейчас, `stack × GAME.SKIM`; читаемость петли, см. ниже),
+`serverNow`.
 Клиент из этого сам ничего не пересчитывает, кроме плавной анимации между поллами.
 
 `hydrateState(raw, now)` приводит запись из хранилища к текущей схеме. Неизвестное

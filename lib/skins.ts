@@ -79,3 +79,56 @@ export function nextSkin(level: number, players: number = 0): SkinGoal | null {
   const s = RANK_SKINS[best];
   return { level: best, label: s.label, unlockAt: s.unlockAt, unlocked: false };
 }
+
+/**
+ * Метки за стрик — вторая, независимая ось косметики (2026-07-28).
+ *
+ * Зачем нужна отдельно от `RANK_SKINS`: скины сейфа выше привязаны к МЕСТУ в недельном
+ * борде — метрике относительной (новичку недостижимой) и ещё гейтящейся `unlockAt` по
+ * размеру комьюнити. На проде это дало пустой результат: максимальный стрик за всё время
+ * работы игры — 1, у лидера борда стрик вообще 0 (обчистил рейдер). Компаунд, вокруг
+ * которого построена вся игра, ни разу не сработал ни у кого.
+ *
+ * Стрик — метрика АБСОЛЮТНАЯ и личная, поэтому здесь сознательно нет `unlockAt` и нет
+ * параметра `players` ни у одной функции: гейтинг по размеру комьюнити применим только
+ * там, где ранняя выдача обесценивает статус («топ-10» из всех при 10 игроках). У стрика
+ * обесценивать нечего — дошёл человек до 7 дней или нет, не зависит от того, сколько ещё
+ * игроков дошло. Достижимо с первого дня для кого угодно, включая игрока без токенов.
+ */
+export interface StreakBadge {
+  /** Стрик, начиная с которого метка засчитана (включительно). */
+  streak: number;
+  label: string;
+  hint: string;
+  /**
+   * Задел под Сезон 1 (см. docs/roadmap.md → «Стратегические направления», направление A,
+   * и NOTES.md 2026-07-28). Смысл метки — вечная отметка раннего игрока: её нельзя купить
+   * (только заработать стриком) и со временем перестанут выдавать новым — но кампания
+   * Сезона 1 ещё не объявлена, поэтому сейчас это ТОЛЬКО косметический маркер: наград,
+   * дедлайна выдачи или текста про сезон здесь намеренно нет.
+   */
+  founding?: boolean;
+}
+
+export const STREAK_BADGES: readonly StreakBadge[] = [
+  { streak: 3, label: "STEADY HAND", hint: "three days, machine never went cold" },
+  {
+    streak: 7,
+    label: "FOUNDING PROSPECTOR",
+    hint: "a week on schedule — earned, not bought",
+    founding: true,
+  },
+  { streak: 14, label: "IRON WILL", hint: "two weeks without a single raid" },
+  { streak: 30, label: "LEGEND OF THE LINE", hint: "thirty days straight — name carved in the vault" },
+] as const;
+
+/** Все метки, которые игрок уже заслужил стриком, по возрастанию порога. */
+export function earnedStreakBadges(streak: number): readonly StreakBadge[] {
+  return STREAK_BADGES.filter((b) => streak >= b.streak);
+}
+
+/** Ближайшая метка впереди, либо null — уже все получены. В отличие от `nextSkin`
+ *  тут нет запасного «откроется раньше всех»: порог фиксирован и от комьюнити не зависит. */
+export function nextStreakBadge(streak: number): StreakBadge | null {
+  return STREAK_BADGES.find((b) => streak < b.streak) ?? null;
+}

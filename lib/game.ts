@@ -443,6 +443,24 @@ export interface HolderTierView {
   sharePct: number;
 }
 
+/**
+ * Превью потери от рейда — для читаемости петли (docs/game-mechanics.md: игрок должен
+ * видеть не только «осталось N времени», но и «что конкретно теряется»). Считает сервер
+ * из текущего стека и константы `GAME.SKIM`; клиент только форматирует готовое число —
+ * это не пересчёт таймингов, а обычное производное поле вроде `multiplier`/`ratePerSec`.
+ */
+export interface RaidPreview {
+  /** Доля стека, которую заберёт рейдер при простое, в процентах (GAME.SKIM × 100). */
+  pct: number;
+  /**
+   * Сколько стека потерялось бы, случись рейд прямо сейчас (`stack × GAME.SKIM`).
+   * Во время `ready` это ТОЧНОЕ число: за grace стек не капает (docs/game-mechanics.md),
+   * поэтому стек не меняется до самого рейда. Фактическую сумму при самом рейде всё
+   * равно считает `advance` — это поле только для предупреждения на экране.
+   */
+  amount: number;
+}
+
 export interface PublicView {
   stack: number;
   streak: number;
@@ -469,6 +487,8 @@ export interface PublicView {
   holderSharePct: number;
   /** Стек, набранный за текущую неделю борда — именно он определяет место в топ-10. */
   weekStack: number;
+  /** Что теряется при простое — см. `RaidPreview`. */
+  raidPreview: RaidPreview;
   serverNow: number;
 }
 
@@ -521,6 +541,7 @@ export function toPublicView(state: PlayerState, now: number): PublicView {
     nextHolder: nextTier ? toHolderView(nextTier) : null,
     holderSharePct: sharePctFromPpb(state.boostPpb),
     weekStack: Math.max(0, state.stack - state.weekStartStack),
+    raidPreview: { pct: GAME.SKIM * 100, amount: state.stack * GAME.SKIM },
     serverNow: now,
   };
 }

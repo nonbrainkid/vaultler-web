@@ -409,6 +409,23 @@ describe("публичный вид для UI", () => {
     expect(v.holder.mult).toBe(1);
     expect(v.nextHolder?.level).toBe(1);
   });
+
+  /**
+   * Читаемость петли: игрок должен видеть не только «сколько времени осталось», но и
+   * «что конкретно теряется» при простое. `raidPreview` — чистое производное поле
+   * (не меняет settle/advance), поэтому проверяем его отдельно от самого рейда.
+   */
+  it("raidPreview считает потенциальную потерю от текущего стека и GAME.SKIM", () => {
+    const s = crank(fresh(), T0).state;
+    const after = settle(s, T0 + GAME.WIND_MS).state; // весь стек уже начислен, ждём grace
+    const v = toPublicView(after, T0 + GAME.WIND_MS);
+    expect(v.raidPreview.pct).toBeCloseTo(GAME.SKIM * 100);
+    expect(v.raidPreview.amount).toBeCloseTo(after.stack * GAME.SKIM);
+  });
+
+  it("на нулевом стеке потенциальная потеря тоже нулевая", () => {
+    expect(toPublicView(fresh(), T0).raidPreview.amount).toBe(0);
+  });
 });
 
 // phaseAt уходит в журнал CrankLog — по нему потом разбирают спорные ситуации.

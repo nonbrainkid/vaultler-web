@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { rankLevel, isSkinUnlocked, nextSkin, RANK_SKINS } from "./skins";
+import {
+  rankLevel,
+  isSkinUnlocked,
+  nextSkin,
+  RANK_SKINS,
+  STREAK_BADGES,
+  earnedStreakBadges,
+  nextStreakBadge,
+} from "./skins";
 
 // Уровни: 0 base · 1 top1000 · 2 top500 · 3 top100 · 4 top10 · 5 #1
 
@@ -78,5 +86,63 @@ describe("nextSkin", () => {
 
   it("на вершине следующей ступени нет", () => {
     expect(nextSkin(5, 5000)).toBeNull();
+  });
+});
+
+describe("метки за стрик — независимая ось (без unlockAt и без размера комьюнити)", () => {
+  it("на старте не заслужено ничего", () => {
+    expect(earnedStreakBadges(0)).toEqual([]);
+    expect(earnedStreakBadges(2)).toEqual([]);
+  });
+
+  it("метка засчитана ровно с порога, включительно", () => {
+    expect(earnedStreakBadges(2).map((b) => b.label)).toEqual([]);
+    expect(earnedStreakBadges(3).map((b) => b.label)).toEqual(["STEADY HAND"]);
+  });
+
+  it("метки копятся: на 7-м дне держатся и 3-дневная, и недельная", () => {
+    expect(earnedStreakBadges(7).map((b) => b.label)).toEqual([
+      "STEADY HAND",
+      "FOUNDING PROSPECTOR",
+    ]);
+  });
+
+  it("на 30 днях заслужены все ступени лестницы", () => {
+    expect(earnedStreakBadges(30).map((b) => b.label)).toEqual(
+      STREAK_BADGES.map((b) => b.label),
+    );
+  });
+
+  it("достижимо с первого дня для кого угодно — гейтинга по комьюнити тут физически нет: " +
+    "ни одна функция не принимает players", () => {
+    // единственный параметр — стрик игрока, размер комьюнити ни на что не влияет
+    expect(earnedStreakBadges.length).toBe(1);
+    expect(nextStreakBadge.length).toBe(1);
+  });
+
+  it("nextStreakBadge ведёт к ближайшему непройденному порогу", () => {
+    expect(nextStreakBadge(0)?.label).toBe("STEADY HAND");
+    expect(nextStreakBadge(3)?.label).toBe("FOUNDING PROSPECTOR");
+    expect(nextStreakBadge(6)?.label).toBe("FOUNDING PROSPECTOR");
+    expect(nextStreakBadge(29)?.label).toBe("LEGEND OF THE LINE");
+  });
+
+  it("на максимуме следующей метки нет — в отличие от nextSkin, запасного варианта нет," +
+    " порог от комьюнити не зависит", () => {
+    expect(nextStreakBadge(30)).toBeNull();
+    expect(nextStreakBadge(1000)).toBeNull();
+  });
+});
+
+describe("FOUNDING PROSPECTOR — задел под Сезон 1 (NOTES.md 2026-07-28)", () => {
+  it("метка засчитана ровно со стрика 7, границы включительно", () => {
+    expect(earnedStreakBadges(6).some((b) => b.founding)).toBe(false);
+    expect(earnedStreakBadges(7).some((b) => b.founding)).toBe(true);
+    expect(earnedStreakBadges(100).some((b) => b.founding)).toBe(true);
+  });
+
+  it("ровно одна ступень лестницы помечена как founding", () => {
+    expect(STREAK_BADGES.filter((b) => b.founding)).toHaveLength(1);
+    expect(STREAK_BADGES.find((b) => b.founding)?.label).toBe("FOUNDING PROSPECTOR");
   });
 });

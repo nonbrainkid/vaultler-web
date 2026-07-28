@@ -1141,6 +1141,50 @@ body {
   color: var(--rust-hi);
   text-shadow: 0 0 10px rgba(224, 90, 58, 0.45);
 }
+
+/* ───────────── метки за стрик ─────────────
+   Вторая, независимая от ранга в борде ось косметики (lib/skins.ts). В отличие от
+   .skin-card тут нет "запертого силуэта" по размеру комьюнити — стрик абсолютный,
+   и не заслуженная пока метка просто приглушена, а не заблокирована условием. */
+.streakbadges {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.sbadge {
+  font-family: var(--pixel);
+  font-size: 8px;
+  letter-spacing: 0.3px;
+  padding: 6px 8px;
+  color: var(--muted);
+  border: 2px solid var(--wood);
+  background: #0d0904;
+  opacity: 0.6;
+}
+.sbadge.earned {
+  opacity: 1;
+  color: #0c1a06;
+  background: var(--neon);
+  border-color: var(--neon-hi);
+}
+/* FOUNDING PROSPECTOR — задел под Сезон 1 (NOTES.md 2026-07-28): золото вместо неона,
+   чтобы отличалась от рядовых меток стрика, без единого слова обещаний в разметке. */
+.sbadge.founding.earned {
+  color: #2a1a04;
+  background: var(--gold);
+  border-color: var(--gold-hi);
+}
+.streak-next {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.streak-next b {
+  color: var(--neon);
+}
+
 .gauge-wrap {
   margin-top: 11px;
 }
@@ -1173,6 +1217,25 @@ body {
   color: var(--rust-hi);
   border-color: var(--rust);
   background: #1e0d08;
+}
+/* Метка фазы — короткое слово в рамке, читаемое мгновенно, отдельно от деталей текстом
+   рядом. Цвет наследуется от .status/.status.ready/.status.stall через currentColor,
+   отдельных .phase-pill.winding/.ready/.stall не нужно. */
+.phase-pill {
+  display: inline-block;
+  font-family: var(--pixel);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border: 2px solid currentColor;
+  vertical-align: middle;
+}
+/* Что конкретно теряется при простое — отдельная строка, не спрятанная в общем тексте.
+   Всегда ржавчина: это ветка «потеря», а не нейтральный статус (docs/design.md). */
+.loss-note {
+  margin-top: 7px;
+  font-size: 13px;
+  color: var(--rust-hi);
 }
 
 .crank {

@@ -5,7 +5,14 @@ import type { HolderTierView, PublicView } from "@/lib/game";
 import ConnectButton from "./components/ConnectButton";
 import ProfileEditor from "./components/ProfileEditor";
 import SafeSprite from "./components/SafeSprite";
-import { RANK_SKINS, rankLevel, nextSkin } from "@/lib/skins";
+import {
+  RANK_SKINS,
+  rankLevel,
+  nextSkin,
+  STREAK_BADGES,
+  earnedStreakBadges,
+  nextStreakBadge,
+} from "@/lib/skins";
 
 const COIN_CAP = [10, 22, 40, 64, 90];
 
@@ -105,6 +112,14 @@ export default function Vault({
   const [holderBalance, setHolderBalance] = useState<string | null>(null);
   const [toNextTier, setToNextTier] = useState<string | null>(null);
   const [netErr, setNetErr] = useState(false);
+  /**
+   * Сколько реально забрал рейдер — держим значение из ответа сервера, пока машина
+   * стоит в `stall`. Сам факт рейда сервер отдаёт ОДИН раз, ровно в том ответе, где
+   * settle его применил (см. lib/game.ts) — следующий поллинг снова видит `raid: null`,
+   * хотя фаза всё ещё "stall". Без этого стейта экран после первого же опроса забывал
+   * бы, что именно потерялось, и надпись про рейд превращалась в голословную.
+   */
+  const [lastLoss, setLastLoss] = useState<number | null>(null);
   const flashRef = useRef<HTMLDivElement>(null);
   const chamberRef = useRef<HTMLDivElement>(null);
   const reduced = useRef(false);
@@ -122,7 +137,13 @@ export default function Vault({
     if (data.nickname !== undefined) setNickname(data.nickname);
     if (data.hideWallet !== undefined) setHideWallet(data.hideWallet);
     setRecvAt(Date.now());
-    if (data.raid && data.raid.lost > 0) triggerFlash();
+    if (data.raid && data.raid.lost > 0) {
+      triggerFlash();
+      setLastLoss(data.raid.lost);
+    }
+    // Машина больше не стоит — рестарт (кранк) или ещё не рейдилась вовсе:
+    // прошлая потеря больше не относится к текущему циклу, сообщать о ней незачем.
+    if (data.view.phase !== "stall") setLastLoss(null);
   }, []);
 
   const refetch = useCallback(async () => {
@@ -250,8 +271,17 @@ export default function Vault({
   const machineClass =
     "machine" + (phase === "winding" ? " winding" : "") + (phase === "stall" ? " stalled" : "");
 
+  // Какие метки за стрик уже заслужены — считает чистая логика (lib/skins.ts), покрытая
+  // тестами; Set нужен только чтобы не гонять фильтр по списку на каждую строку рендера.
+  const earnedSet = new Set(earnedStreakBadges(view?.streak ?? 0).map((b) => b.streak));
+
   let statusClass = "status";
-  let statusText = "loading…";
+  // Метка фазы — короткое слово, читаемое за долю секунды, отдельно от деталей ниже.
+  // Раньше вся эта информация была одной строкой текста; на живом проде это оказалось
+  // недостаточно заметно — по экрану не было видно, что происходит с машиной прямо сейчас.
+  let phaseLabel = "…";
+  let phaseDetail = "loading machine state…";
+  let lossNote: string | null = null;
   let crankLabel = "CRANK";
   let crankHint = "start the machine";
   let crankDisabled = busy;
@@ -259,22 +289,36 @@ export default function Vault({
 
   if (view) {
     if (phase === "off") {
-      statusText = "machine is off";
+      phaseLabel = "OFF";
+      phaseDetail = "crank to start stacking";
     } else if (phase === "winding") {
-      statusText = `STACKING · ${fmtLeft(d?.endsIn ?? 0)} left`;
+      phaseLabel = "WINDING";
+      phaseDetail = `window opens in ${fmtLeft(d?.endsIn ?? 0)}`;
       crankLabel = "WINDING…";
       crankHint = "already winding — come back at 0";
       crankDisabled = true;
     } else if (phase === "ready") {
       statusClass += " ready";
-      statusText = `CRANK NOW · ${fmtLeft(d?.endsIn ?? 0)} before the raider`;
+      phaseLabel = "WINDOW OPEN";
+      phaseDetail = `raider in ${fmtLeft(d?.endsIn ?? 0)} — crank now`;
       crankHint = "+1 streak · multiplier up";
+      // Раньше было видно только «сколько времени», не «что теряю». raidPreview.amount
+      // точен именно в ready: за grace стек не капает, поэтому он не успевает устареть.
+      lossNote =
+        view.raidPreview.amount > 0
+          ? `miss it → lose ~${fmt(view.raidPreview.amount)} stack (${Math.round(view.raidPreview.pct)}%) and the streak`
+          : `miss it → lose the streak`;
     } else {
       statusClass += " stall";
-      statusText = "RAIDED — machine stalled, streak lost";
+      phaseLabel = "RAIDED";
+      phaseDetail = "machine stalled — streak reset to 0";
       crankLabel = "RESTART";
       crankHint = "streak resets to 1";
       crankDanger = true;
+      lossNote =
+        lastLoss != null
+          ? `raider took ${fmt(lastLoss)} stack while you were away`
+          : "stack was skimmed while you were away";
     }
   }
 
@@ -383,6 +427,34 @@ export default function Vault({
               </div>
             </div>
 
+            {/* Метки за стрик — вторая, независимая от ранга в борде ось косметики
+                (lib/skins.ts). В отличие от скинов сейфа она не гейтится размером
+                комьюнити: стрик — личная метрика, достижимая с первого дня кем угодно. */}
+            <ul className="streakbadges" aria-label="streak badges">
+              {STREAK_BADGES.map((b) => {
+                // Порог сравнивает lib/skins.ts, а не этот файл: иначе «заслужено» жило бы
+                // в двух местах и однажды разошлось бы с тестами на чистой логике.
+                const earned = earnedSet.has(b.streak);
+                return (
+                  <li
+                    key={b.streak}
+                    className={"sbadge" + (earned ? " earned" : "") + (b.founding ? " founding" : "")}
+                    title={`${b.hint} (streak ${b.streak}+)`}
+                  >
+                    {b.label}
+                  </li>
+                );
+              })}
+            </ul>
+            {(() => {
+              const goalBadge = nextStreakBadge(view?.streak ?? 0);
+              return goalBadge ? (
+                <p className="streak-next">
+                  next: <b>{goalBadge.label}</b> at streak {goalBadge.streak}
+                </p>
+              ) : null;
+            })()}
+
             <div className="gauge-wrap">
               <svg viewBox="0 0 200 24" aria-hidden="true">
                 <rect x="2" y="14" width="196" height="6" fill="#0e0904" />
@@ -404,7 +476,8 @@ export default function Vault({
             </div>
 
             <div className={statusClass} role="status" aria-live="polite">
-              {statusText}
+              <span className="phase-pill">{phaseLabel}</span> · {phaseDetail}
+              {lossNote && <div className="loss-note">{lossNote}</div>}
             </div>
           </div>
 
