@@ -13,7 +13,7 @@ const QA = [
   },
   {
     q: "So where do real rewards come from?",
-    a: "Trading fees — 7% of volume on the token. Half of what we collect funds a weekly pool that the top 10 of the leaderboard split, paid manually each week in real tokens. No volume, no pool: rewards scale with real activity and are never guaranteed.",
+    a: "Trading fees. Every buy and sell pays a pool fee, and the launchpad routes a share of it to us as the token's creator — both numbers are set by the launchpad, not by us, so we are not going to print one here and let it drift out of date. What we do set is what happens next: half of everything we collect funds a weekly pool that the top 10 of the leaderboard split, paid manually each week in real tokens. No volume, no pool: rewards scale with real activity and are never guaranteed.",
   },
   {
     q: "So holding pays me a cut of fees — is that a dividend?",

@@ -36,10 +36,17 @@ export default function TokenSection() {
 
           <article className="card">
             <h3 className="card-h neon">WEEKLY POOL FROM FEES</h3>
+            {/* Процент фиса намеренно не назван: его задаёт лончпад, а не мы, и он
+                зависит от фабрики, на которой запущен токен. Опубликованное число, которое
+                мы не контролируем, — это обещание, которое однажды станет ложным без
+                нашего участия. «Половина» — наше собственное правило, вот его и обещаем. */}
             <p>
-              Trading generates <b>7%</b> fees on volume. <b>Half</b> of that funds a weekly
-              pool, split by the <b>top 10</b> of the leaderboard in real tokens. No volume,
-              no pool — rewards scale with real activity and are never guaranteed.
+              Every buy and sell pays a pool fee, and the launchpad routes a share of it to
+              us as the token&apos;s creator — both numbers are set by the launchpad, not by
+              us. What we set is what happens next: <b>half</b> of everything we collect
+              funds a weekly pool, split by the <b>top 10</b> of the leaderboard in real
+              tokens. No volume, no pool — rewards scale with real activity and are never
+              guaranteed.
             </p>
           </article>
 
