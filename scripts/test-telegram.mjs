@@ -14,6 +14,8 @@
 //
 //   node scripts/test-telegram.mjs   (в другом терминале)
 
+import { webhookUrl } from "../lib/telegram.ts";
+
 const BASE = process.env.BASE ?? "http://localhost:3000";
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -66,8 +68,17 @@ async function unlinkSite(jar, headers = {}) {
 }
 
 let nextUpdateId = 1;
-/** Симулировать апдейт от Telegram — тем же путём и секретом, что и настоящий сервис. */
-async function webhook(body, { secret = WEBHOOK_SECRET, header = WEBHOOK_SECRET } = {}) {
+/**
+ * Симулировать апдейт от Telegram — тем же путём и секретом, что и настоящий сервис.
+ *
+ * Путь берётся из `webhookUrl()`, а НЕ собирается здесь из секрета: это ровно та ошибка,
+ * на которой уже обожглись однажды (NOTES.md 2026-07-25, история с SIWE_STATEMENT) —
+ * тест, который строит входные данные сам, проверяет себя, а не продукт. Здесь цена была
+ * бы выше: разойдись формула пути между продуктом и тестом, зелёные тесты сопровождали бы
+ * вебхук, который Telegram не может дозваться.
+ */
+const WEBHOOK_PATH = webhookUrl(BASE).split("/").pop();
+async function webhook(body, { secret = WEBHOOK_PATH, header = WEBHOOK_SECRET } = {}) {
   const r = await fetch(`${BASE}/api/telegram/webhook/${secret}`, {
     method: "POST",
     headers: {

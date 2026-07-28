@@ -25,10 +25,29 @@ function envToken(): string | null {
   return t && t.length > 0 ? t : null;
 }
 
-/** ≥32 символов: это же значение уходит и в путь URL, и в заголовок secret_token. */
+/** ≥32 символов. Уходит ТОЛЬКО в заголовок `secret_token`; в путь идёт производная. */
 function envWebhookSecret(): string | null {
   const s = process.env.TELEGRAM_WEBHOOK_SECRET;
   return s && s.length >= 32 ? s : null;
+}
+
+/**
+ * Сегмент пути вебхука — SHA-256 от секрета, а НЕ сам секрет (исправлено 2026-07-28).
+ *
+ * Раньше в пути стояло само значение `TELEGRAM_WEBHOOK_SECRET`, и это была ошибка: URL
+ * не является секретосодержащим местом. Он оседает в логах прокси и платформы, в истории
+ * терминала, в выводе `setWebhook`, в базе самого Telegram — и достаточно один раз
+ * показать эту строку кому-то, чтобы вместе с ней утёк и заголовок, которым запрос
+ * реально аутентифицируется. Два барьера превращались в один.
+ *
+ * Хеш ломает эту связь в нужную сторону: путь по-прежнему не угадать, но, зная путь,
+ * нельзя вычислить секрет заголовка — это потребовало бы обращения SHA-256. Утечка URL
+ * теперь стоит только смены URL, а не компрометации всей фичи.
+ */
+function webhookPathSegment(): string | null {
+  const secret = envWebhookSecret();
+  if (!secret) return null;
+  return createHash("sha256").update(`vltr:tgwh:${secret}`).digest("hex");
 }
 
 /**
@@ -137,9 +156,20 @@ export async function sendTelegramMessage(chatId: number, text: string): Promise
 
 /** URL вебхука, который передаётся в `setWebhook` и который обслуживает наш роут. */
 export function webhookUrl(siteUrl: string): string {
-  const secret = envWebhookSecret();
-  if (!secret) throw new Error("TELEGRAM_WEBHOOK_SECRET не задан");
-  return `${siteUrl.replace(/\/+$/, "")}/api/telegram/webhook/${secret}`;
+  const segment = webhookPathSegment();
+  if (!segment) throw new Error("TELEGRAM_WEBHOOK_SECRET не задан");
+  return `${siteUrl.replace(/\/+$/, "")}/api/telegram/webhook/${segment}`;
+}
+
+/**
+ * Сверить сегмент пути. Отдельная функция от `verifyWebhookSecret`: путь и заголовок
+ * теперь разные значения, и сравнивать их одной проверкой значило бы вернуть ту самую
+ * ошибку, из-за которой утёкший URL обесценивал заголовок.
+ */
+export function verifyWebhookPath(candidate: string | null | undefined): boolean {
+  const segment = webhookPathSegment();
+  if (!segment || !candidate) return false;
+  return timingSafeStrEqual(candidate, segment);
 }
 
 /**

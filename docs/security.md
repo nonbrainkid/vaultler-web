@@ -27,7 +27,8 @@
 | спор «у меня было больше стека» | журнал успешных кранков в одной транзакции со стейтом | `CrankLog`, `lib/store-prisma.ts` |
 | утечка секретов в git | аудит рабочего дерева **и всей истории** в pre-push | `scripts/check-secrets.mjs` |
 | деанонимизация игрока | адрес не отдаётся, если скрыт; internal id не отдаётся никогда | `lib/leaderboard.ts` |
-| подделка апдейтов Telegram-бота (захват чужого chatId) | секрет в пути URL **и** заголовок `X-Telegram-Bot-Api-Secret-Token`, оба через `timingSafeEqual`; несовпадение → 404 | `lib/telegram.ts`, `app/api/telegram/webhook/[secret]/route.ts` |
+| подделка апдейтов Telegram-бота (захват чужого chatId) | **хеш** секрета в пути URL **и** сам секрет в заголовке `X-Telegram-Bot-Api-Secret-Token` — два РАЗНЫХ значения, оба через `timingSafeEqual`; несовпадение → 404 | `lib/telegram.ts`, `app/api/telegram/webhook/[secret]/route.ts` |
+| утечка URL вебхука (логи платформы, история терминала, база Telegram) обесценивает заголовок | путь = `SHA-256(секрет)`, поэтому по URL секрет не восстановить: обращение хеша. Было наоборот до 2026-07-28 — в пути стоял сам секрет, и два барьера были одним | `lib/telegram.ts` → `webhookPathSegment`, регрессия в `lib/telegram.test.ts` |
 | повторная доставка апдейта (ретрай Telegram) удваивает эффект | дедуп по `update_id` в KV/памяти, TTL 24ч | `app/api/telegram/webhook/[secret]/route.ts` |
 | перебор/подсматривание одноразового кода привязки | 128 бит энтропии, хранится ТОЛЬКО как SHA-256-хеш, `GETDEL` — строго одноразовый, TTL 10 мин | `lib/telegram-link.ts` |
 | захват чужого аккаунта через привязку бота | код выдаётся только владельцу активной сессии (`resolveIdentity`), привязка 1:1 в обе стороны | `lib/telegram-link.ts`, `lib/store-prisma.ts` |

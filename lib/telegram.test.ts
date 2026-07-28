@@ -4,6 +4,7 @@ import {
   telegramConfigured,
   telegramStatus,
   verifyCronSecret,
+  verifyWebhookPath,
   verifyWebhookSecret,
   webhookUrl,
 } from "./telegram";
@@ -149,11 +150,31 @@ describe("sendTelegramMessage", () => {
 });
 
 describe("webhookUrl", () => {
-  it("собирает URL с секретом сегментом пути", () => {
+  /**
+   * Главная регрессия правки 2026-07-28: в пути НЕ должно быть самого секрета. Раньше он
+   * стоял там дословно, и любая утечка URL (логи платформы, история терминала, вывод
+   * setWebhook, база Telegram) отдавала вместе с ним заголовок, которым запрос реально
+   * аутентифицируется, — два барьера превращались в один.
+   */
+  it("в пути стоит производная, а не сам секрет", () => {
     process.env.TELEGRAM_WEBHOOK_SECRET = SECRET32;
-    expect(webhookUrl("https://thevaultler.fun/")).toBe(
-      `https://thevaultler.fun/api/telegram/webhook/${SECRET32}`,
-    );
+    const url = webhookUrl("https://thevaultler.fun/");
+    expect(url).not.toContain(SECRET32);
+    expect(url).toMatch(/^https:\/\/thevaultler\.fun\/api\/telegram\/webhook\/[0-9a-f]{64}$/);
+  });
+
+  it("сегмент пути детерминирован: setWebhook и роут обязаны сойтись", () => {
+    process.env.TELEGRAM_WEBHOOK_SECRET = SECRET32;
+    const segment = webhookUrl("https://thevaultler.fun").split("/").pop()!;
+    expect(verifyWebhookPath(segment)).toBe(true);
+    expect(verifyWebhookPath(SECRET32)).toBe(false); // старый путь больше не принимается
+  });
+
+  it("путь и заголовок — разные значения, одно не проходит вместо другого", () => {
+    process.env.TELEGRAM_WEBHOOK_SECRET = SECRET32;
+    const segment = webhookUrl("https://thevaultler.fun").split("/").pop()!;
+    expect(verifyWebhookSecret(segment)).toBe(false);
+    expect(verifyWebhookSecret(SECRET32)).toBe(true);
   });
 
   it("без секрета в env — бросает, а не строит URL со значением 'undefined'", () => {

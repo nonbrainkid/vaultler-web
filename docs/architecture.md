@@ -47,7 +47,7 @@ GET /api/leaderboard (8с)                           lib/vltr.ts → RPC        
 | кошелёк → сервер | SIWE: домен, nonce, срок, подпись | `app/api/auth/verify/route.ts` |
 | сервер → блокчейн | только чтение публичного баланса, транзакций нет | `lib/vltr.ts` |
 | сервер → браузер | наружу не уходят internal id (`dev:…`, `wallet:0x…`) и адрес скрывшего игрока | `lib/leaderboard.ts` |
-| Telegram → сервер | секрет в пути URL **и** в заголовке `X-Telegram-Bot-Api-Secret-Token` (не `Origin` — у вебхука его нет) | `lib/telegram.ts`, `app/api/telegram/webhook/[secret]/route.ts` |
+| Telegram → сервер | хеш секрета в пути URL **и** сам секрет в заголовке `X-Telegram-Bot-Api-Secret-Token` — разные значения (не `Origin`: у вебхука его нет) | `lib/telegram.ts`, `app/api/telegram/webhook/[secret]/route.ts` |
 | сервер → браузер (бот) | `chatId` не отдаётся ни в одном ответе API | `lib/telegram-link.ts` |
 
 ## Поток данных: типовые сценарии

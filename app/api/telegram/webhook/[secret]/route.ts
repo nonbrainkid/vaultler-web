@@ -7,15 +7,21 @@
  * и привязывает произвольный chatId к произвольному аккаунту. Поэтому здесь ДВА
  * независимых контроля, и оба обязательны:
  *
- *  1. Сегмент пути `[secret]` — случайный, из env: URL просто не угадать перебором.
- *  2. Заголовок `X-Telegram-Bot-Api-Secret-Token` — Telegram прикладывает его сам на
- *     КАЖДЫЙ вызов, потому что мы передали `secret_token` в `setWebhook`
+ *  1. Сегмент пути `[secret]` — SHA-256 от `TELEGRAM_WEBHOOK_SECRET`: URL не угадать
+ *     перебором (`verifyWebhookPath`).
+ *  2. Заголовок `X-Telegram-Bot-Api-Secret-Token` — сам секрет. Telegram прикладывает его
+ *     на КАЖДЫЙ вызов, потому что мы передали `secret_token` в `setWebhook`
  *     (lib/telegram.ts). Это и есть настоящая аутентификация запроса.
  *
- * Оба сравниваются с ОДНИМ И ТЕМ ЖЕ значением `TELEGRAM_WEBHOOK_SECRET` через
- * SHA-256 + timingSafeEqual (`verifyWebhookSecret`), а не строковым `===`. При провале —
+ * ЗНАЧЕНИЯ РАЗНЫЕ, И ЭТО СУТЬ (исправлено 2026-07-28, было одно на оба). URL — не
+ * секретосодержащее место: он оседает в логах платформы и прокси, в истории терминала,
+ * в выводе `setWebhook` и в базе самого Telegram. Пока в пути стоял сам секрет, любая
+ * утечка URL отдавала и заголовок, то есть два барьера были одним. Хеш ломает связь в
+ * нужную сторону: зная путь, секрет заголовка не вычислить.
+ *
+ * Оба сравниваются через SHA-256 + timingSafeEqual, а не строковым `===`. При провале —
  * 404, а не 401/403: код ответа не должен подсказывать угадывающему путь, что он на
- * верном напрвлении (401 подтвердил бы "путь существует, но не тот секрет").
+ * верном направлении (401 подтвердил бы "путь существует, но не тот секрет").
  *
  * ИНВАРИАНТ 8 (sameOriginOk на каждом POST) ЗДЕСЬ НЕ ПРИМЕНИМ И НЕ ОСЛАБЛЯЕТСЯ ГЛОБАЛЬНО:
  * у серверного запроса от Telegram нет заголовка Origin в принципе — это ожидаемо, а не
@@ -33,7 +39,7 @@ import { getKv } from "@/lib/kv";
 import { allowTelegramWebhook } from "@/lib/ratelimit";
 import { getStore } from "@/lib/store";
 import { completeLink } from "@/lib/telegram-link";
-import { sendTelegramMessage, verifyWebhookSecret } from "@/lib/telegram";
+import { sendTelegramMessage, verifyWebhookPath, verifyWebhookSecret } from "@/lib/telegram";
 import {
   helpText,
   invalidOrExpiredCodeText,
@@ -87,8 +93,12 @@ export async function POST(
 ) {
   const { secret } = await params;
 
+  // Путь и заголовок — РАЗНЫЕ значения: в пути хеш секрета, в заголовке сам секрет
+  // (lib/telegram.ts, правка 2026-07-28). Проверять их одной функцией было бы возвратом
+  // к прежней ошибке: URL попадает в логи и в базу Telegram, и вместе с ним утекал бы
+  // заголовок, которым запрос аутентифицируется на самом деле.
   if (
-    !verifyWebhookSecret(secret) ||
+    !verifyWebhookPath(secret) ||
     !verifyWebhookSecret(req.headers.get("x-telegram-bot-api-secret-token"))
   ) {
     return new Response(null, { status: 404 });

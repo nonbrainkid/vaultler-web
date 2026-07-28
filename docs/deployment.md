@@ -21,7 +21,7 @@
 | `KV_REST_API_URL` | до реальных призов | Redis для rate-limit (и для одноразовых кодов Telegram / дедупа рассылки, см. ниже). Vercel KV подставляет сам при привязке стора |
 | `KV_REST_API_TOKEN` | до реальных призов | токен к нему. Альтернатива — пара `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` |
 | `TELEGRAM_BOT_TOKEN` | нужна, чтобы включить бота | токен из @BotFather. Формат `\d{8,10}:[A-Za-z0-9_-]{35}` — под этот паттерн настроен `check:secrets` |
-| `TELEGRAM_WEBHOOK_SECRET` | нужна, чтобы включить бота (≥32 симв.) | ГЛАВНЫЙ контроль вебхука: сегмент пути `/api/telegram/webhook/<secret>` **и** значение `secret_token` в `setWebhook` — Telegram прикладывает его заголовком на каждый апдейт, роут сверяет через `timingSafeEqual`. `openssl rand -hex 32` |
+| `TELEGRAM_WEBHOOK_SECRET` | нужна, чтобы включить бота (≥32 симв.) | ГЛАВНЫЙ контроль вебхука. В `secret_token` при `setWebhook` уходит САМО значение (Telegram шлёт его заголовком на каждый апдейт), а в сегмент пути — `SHA-256` от него. Значения разные намеренно: URL попадает в логи, в историю терминала и в базу Telegram, и будь там сам секрет, утечка URL отдавала бы и заголовок. `openssl rand -hex 32`. **Ротация:** новое значение в env → передеплой → `npm run telegram:setup` заново (URL меняется вместе с секретом) |
 | `CRON_SECRET` | нужна, чтобы включить бота (≥16 симв.) | секрет `POST /api/telegram/remind` (`Authorization: Bearer`). То же значение кладётся в GitHub Secrets репозитория для workflow-рассылки (см. ниже) |
 | `GAME_MODE` | **не выставлять** | `demo` → сжатые тайминги 30с/15с |
 | `DEV_FORCE_BOOST` | **не выставлять** | `1` → буст включён принудительно (тест пути буста) |
