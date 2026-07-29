@@ -9,6 +9,7 @@
  * с кошельковыми — это осознанное решение (docs/brief-engineer.md → 1.1).
  */
 import { NextRequest } from "next/server";
+import { noteSecurityEvent } from "@/lib/security-log";
 import { jsonNoStore, resolveIdentity, sameOriginOk } from "@/lib/http";
 import { allowTelegramLink } from "@/lib/ratelimit";
 import { getStore } from "@/lib/store";
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
   // CSRF-запросом от имени залогиненной жертвы. Cross-origin fetch и так не читает тело
   // без CORS, но проверка происхождения — по конвенции проекта на каждом POST.
   if (!sameOriginOk(req)) {
+    noteSecurityEvent("bad_origin");
     return jsonNoStore({ error: "bad_origin" }, { status: 403 });
   }
   if (!telegramConfigured()) {
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest) {
 
   const identity = await resolveIdentity(req);
   if (!(await allowTelegramLink(identity, Date.now()))) {
+    noteSecurityEvent("rate_limited");
     return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
 

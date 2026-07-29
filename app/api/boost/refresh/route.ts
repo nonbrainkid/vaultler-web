@@ -3,6 +3,7 @@
  * Для анонимной сессии — no-op. Чтение баланса делает сервер (клиент буст не задаёт).
  */
 import { NextRequest } from "next/server";
+import { noteSecurityEvent } from "@/lib/security-log";
 import { addressFromIdentity } from "@/lib/auth";
 import { readHolderStatus } from "@/lib/vltr";
 import { getStore } from "@/lib/store";
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   if (!sameOriginOk(req)) {
+    noteSecurityEvent("bad_origin");
     return jsonNoStore({ error: "bad_origin" }, { status: 403 });
   }
 
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest) {
   // прокачивает через нас неограниченный поток запросов к провайдеру: это и счёт,
   // и риск, что провайдер прикроет ключ, а вместе с ним отвалится буст у всех.
   if (!(await allowBoost(identity, now))) {
+    noteSecurityEvent("rate_limited");
     return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
 

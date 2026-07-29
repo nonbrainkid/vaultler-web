@@ -15,6 +15,7 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest } from "next/server";
+import { noteSecurityEvent } from "@/lib/security-log";
 import { settle } from "@/lib/game";
 import { jsonNoStore, readJsonBody } from "@/lib/http";
 import { parseExcluded } from "@/lib/leaderboard";
@@ -54,7 +55,12 @@ export async function POST(req: NextRequest) {
   if ((process.env.ADMIN_SECRET ?? "").length < 16) {
     return jsonNoStore({ error: "admin_secret_missing" }, { status: 503 });
   }
-  if (!authorized(req)) return jsonNoStore({ error: "unauthorized" }, { status: 401 });
+  if (!authorized(req)) {
+    // Подбор админского секрета — самое ценное событие в этой сводке: легитимных
+    // источников у него нет вовсе, значит любой всплеск означает, что роут нашли.
+    noteSecurityEvent("admin_unauthorized");
+    return jsonNoStore({ error: "unauthorized" }, { status: 401 });
+  }
 
   const body = await readJsonBody(req);
   if (!body.ok) return jsonNoStore({ error: body.error }, { status: 400 });

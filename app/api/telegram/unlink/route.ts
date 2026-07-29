@@ -8,6 +8,7 @@
  * неотличимы для будущего аудита, а бот продолжал бы технически иметь chatId в базе.
  */
 import { NextRequest } from "next/server";
+import { noteSecurityEvent } from "@/lib/security-log";
 import { jsonNoStore, resolveIdentity, sameOriginOk } from "@/lib/http";
 import { allowTelegramLink } from "@/lib/ratelimit";
 import { getStore } from "@/lib/store";
@@ -19,11 +20,13 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   if (!sameOriginOk(req)) {
+    noteSecurityEvent("bad_origin");
     return jsonNoStore({ error: "bad_origin" }, { status: 403 });
   }
 
   const identity = await resolveIdentity(req);
   if (!(await allowTelegramLink(identity, Date.now()))) {
+    noteSecurityEvent("rate_limited");
     return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
 

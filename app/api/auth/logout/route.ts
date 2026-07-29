@@ -3,6 +3,7 @@
  * На следующем запросе proxy заведёт свежую анонимную dev-сессию (играть можно и без кошелька).
  */
 import { NextRequest } from "next/server";
+import { noteSecurityEvent } from "@/lib/security-log";
 import { SESSION_COOKIE } from "@/lib/session";
 import { NONCE_COOKIE } from "@/lib/auth";
 import { jsonNoStore, sameOriginOk } from "@/lib/http";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   // Выход — тоже мутация: чужая страница не должна разлогинивать игрока в один клик.
   if (!sameOriginOk(req)) {
+    noteSecurityEvent("bad_origin");
     return jsonNoStore({ error: "bad_origin" }, { status: 403 });
   }
 

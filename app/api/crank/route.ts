@@ -4,6 +4,7 @@
  * Клиент НЕ может ускорить время или начислить стек в обход этой логики.
  */
 import { NextRequest } from "next/server";
+import { noteSecurityEvent } from "@/lib/security-log";
 import { crank, phase, settle, toPublicView, type HolderRead } from "@/lib/game";
 import { getStore } from "@/lib/store";
 import { jsonNoStore, resolveIdentity, sameOriginOk } from "@/lib/http";
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
   // Кранк меняет стейт и влияет на позицию в борде, который делит реальные токены:
   // чужая страница не должна дёргать его за игрока (например, чтобы сбить ему тайминг).
   if (!sameOriginOk(req)) {
+    noteSecurityEvent("bad_origin");
     return jsonNoStore({ error: "bad_origin" }, { status: 403 });
   }
 
@@ -25,6 +27,7 @@ export async function POST(req: NextRequest) {
   const now = Date.now();
 
   if (!(await allowCrank(identity, now))) {
+    noteSecurityEvent("rate_limited");
     return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
 

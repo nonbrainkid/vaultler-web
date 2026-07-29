@@ -3,6 +3,7 @@
  * (у анонимов личность = кука, легко сбросить → сквот ников). Ник уникален глобально.
  */
 import { NextRequest } from "next/server";
+import { noteSecurityEvent } from "@/lib/security-log";
 import { jsonNoStore, readJsonBody, resolveIdentity, sameOriginOk } from "@/lib/http";
 import { addressFromIdentity } from "@/lib/auth";
 import { validateNickname } from "@/lib/profile";
@@ -18,11 +19,13 @@ export async function POST(req: NextRequest) {
   // Без этой проверки чужая страница могла бы молча переименовать игрока на борде
   // или раскрыть его адрес, сняв hideWallet, — cookie браузер приложил бы сам.
   if (!sameOriginOk(req)) {
+    noteSecurityEvent("bad_origin");
     return jsonNoStore({ error: "bad_origin" }, { status: 403 });
   }
 
   const identity = await resolveIdentity(req);
   if (!(await allowProfile(clientKey(req, identity), Date.now()))) {
+    noteSecurityEvent("rate_limited");
     return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
 

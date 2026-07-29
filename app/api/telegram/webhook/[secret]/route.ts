@@ -34,6 +34,7 @@
  * стек/стрик/буст. Ни одного вызова `crank`/`settle`-с-персистом здесь нет.
  */
 import { NextRequest } from "next/server";
+import { noteSecurityEvent } from "@/lib/security-log";
 import { jsonNoStore, readJsonBody } from "@/lib/http";
 import { getKv } from "@/lib/kv";
 import { allowTelegramWebhook } from "@/lib/ratelimit";
@@ -101,6 +102,7 @@ export async function POST(
     !verifyWebhookPath(secret) ||
     !verifyWebhookSecret(req.headers.get("x-telegram-bot-api-secret-token"))
   ) {
+    noteSecurityEvent("webhook_rejected");
     return new Response(null, { status: 404 });
   }
 

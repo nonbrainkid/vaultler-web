@@ -11,6 +11,7 @@
  * сообщения и публичный баланс $VLTR. Задрейнить через этот флоу нечего.
  */
 import { NextRequest } from "next/server";
+import { noteSecurityEvent } from "@/lib/security-log";
 import { verifyMessage, isAddress } from "viem";
 import { parseSiweMessage, validateSiweMessage } from "viem/siwe";
 import {
@@ -37,10 +38,12 @@ const MAX_SIGNATURE_LEN = 4096;
 
 export async function POST(req: NextRequest) {
   if (!sameOriginOk(req)) {
+    noteSecurityEvent("bad_origin");
     return jsonNoStore({ error: "bad_origin" }, { status: 403 });
   }
 
   if (!(await allowAuth(clientKey(req, await resolveIdentity(req)), Date.now()))) {
+    noteSecurityEvent("rate_limited");
     return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
 
@@ -99,21 +102,26 @@ export async function POST(req: NextRequest) {
    */
   const expiresAt = parsed.expirationTime?.getTime();
   if (expiresAt === undefined || !Number.isFinite(expiresAt)) {
+    noteSecurityEvent("bad_signature");
     return jsonNoStore({ error: "message_rejected" }, { status: 401 });
   }
   if (expiresAt - now > SIWE_TTL_MS + SIWE_CLOCK_SKEW_MS) {
+    noteSecurityEvent("bad_signature");
     return jsonNoStore({ error: "message_rejected" }, { status: 401 });
   }
   // Версия EIP-4361 — часть контракта: чужая версия означает другой формат разбора.
   if (parsed.version !== "1") {
+    noteSecurityEvent("bad_signature");
     return jsonNoStore({ error: "message_rejected" }, { status: 401 });
   }
   // uri обязан указывать на нас же: домен и адрес страницы не должны расходиться.
   try {
     if (!parsed.uri || new URL(parsed.uri).host !== domain) {
+      noteSecurityEvent("bad_signature");
       return jsonNoStore({ error: "message_rejected" }, { status: 401 });
     }
   } catch {
+    noteSecurityEvent("bad_signature");
     return jsonNoStore({ error: "message_rejected" }, { status: 401 });
   }
 
@@ -125,6 +133,7 @@ export async function POST(req: NextRequest) {
     time: new Date(now),
   });
   if (!fieldsOk) {
+    noteSecurityEvent("bad_signature");
     return jsonNoStore({ error: "message_rejected" }, { status: 401 });
   }
 
@@ -140,6 +149,7 @@ export async function POST(req: NextRequest) {
     sigOk = false;
   }
   if (!sigOk) {
+    noteSecurityEvent("bad_signature");
     return jsonNoStore({ error: "bad_signature" }, { status: 401 });
   }
 

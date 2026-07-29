@@ -4,6 +4,7 @@
  * стирается при verify), а сам nonce клиенту не подделать в обход cookie.
  */
 import { NextRequest } from "next/server";
+import { noteSecurityEvent } from "@/lib/security-log";
 import { generateSiweNonce } from "viem/siwe";
 import { NONCE_COOKIE, SIWE_TTL_MS } from "@/lib/auth";
 import { allowNonce, clientKey } from "@/lib/ratelimit";
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
   // Ключ лимита: доверенный IP, а если его неоткуда взять — сессия (см. lib/ratelimit.ts).
   const key = clientKey(req, await resolveIdentity(req));
   if (!(await allowNonce(key, Date.now()))) {
+    noteSecurityEvent("rate_limited");
     return jsonNoStore({ error: "rate_limited" }, { status: 429 });
   }
 

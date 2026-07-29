@@ -51,6 +51,14 @@ export interface Kv {
    * его на уровне самого Redis, а не в нашем коде.
    */
   getAndDelete(key: string): Promise<string | null>;
+  /**
+   * `MGET key…` — прочитать несколько ключей одним round-trip, не удаляя.
+   *
+   * Именно MGET, а не GET в цикле: сводка отказов безопасности читает по два ведра на
+   * каждый тип события, и на REST-клиенте это превратилось бы в десяток последовательных
+   * запросов ради одной страницы. Отсутствующий ключ отдаётся как null.
+   */
+  getMany(keys: readonly string[]): Promise<(string | null)[]>;
 }
 
 type RedisReply = { result?: unknown; error?: string };
@@ -109,6 +117,16 @@ class RestKv implements Kv {
     const raw = (await post(this.cfg, "/", ["GETDEL", key])) as RedisReply;
     if (raw.error) throw new Error(`kv: ${raw.error}`);
     return typeof raw.result === "string" ? raw.result : null;
+  }
+
+  async getMany(keys: readonly string[]): Promise<(string | null)[]> {
+    if (keys.length === 0) return [];
+    const raw = (await post(this.cfg, "/", ["MGET", ...keys])) as RedisReply;
+    if (raw.error) throw new Error(`kv: ${raw.error}`);
+    const arr = Array.isArray(raw.result) ? raw.result : [];
+    // Длину выравниваем по запросу: короткий ответ не должен молча сдвинуть соответствие
+    // ключ→значение и приписать счётчик не тому событию.
+    return keys.map((_, i) => (typeof arr[i] === "string" ? (arr[i] as string) : null));
   }
 }
 
