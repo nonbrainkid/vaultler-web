@@ -102,12 +102,13 @@ export default function Leaderboard({
         <b>{lb ? fmtWeek(lb.week.endsInMs) : "—"}</b> · <b>{lb?.players ?? 0}</b> stackers
       </div>
       <div className="paidzone">
-        ▸ the top <b>{lb?.payoutSeats ?? 10}</b> connected wallets are in the money ·
-        ranked by $STACK earned <b>this week</b>
+        ▸ the top <b>{lb?.payoutSeats ?? 10}</b> seats are in the money · ranked by $STACK
+        earned <b>this week</b>
       </div>
       <div className="subline">
-        Anyone can play and climb. A payout needs a connected wallet — there is nowhere
-        to send tokens otherwise.
+        Anyone can play and climb, and a seat is a seat. But a payout needs a connected
+        wallet — there is nowhere to send tokens otherwise, and an unclaimed share is
+        burned, not passed down.
       </div>
 
       {failed && (

@@ -17,7 +17,7 @@
  * игрок в базе), деградирует до короткого адреса — не до пустой строки.
  */
 import type { PlayerState } from "./game";
-import type { WeekResultRecord } from "./week-results";
+import { forfeitedShare, type WeekResultRecord } from "./week-results";
 
 export interface PayoutRow {
   /** Место в деньгах (1…10) либо null — участвовал, но вне призовой зоны. */
@@ -38,10 +38,14 @@ export interface PayoutRow {
 export interface PayoutWeek {
   weekId: number;
   rows: PayoutRow[];
-  /** Сколько мест в деньгах фактически занято — по ним и перенормированы доли. */
+  /** Сколько призовых мест занято — включая места без кошелька. */
+  seats: number;
+  /** Из них с подтверждённым кошельком: только этим и платят. */
   paidSeats: number;
-  /** Сколько из них уже подтверждены хешем транзакции. */
+  /** Сколько из оплачиваемых уже подтверждены хешем транзакции. */
   paidTxCount: number;
+  /** Доля пула, не выплаченная никому (места без кошелька + незанятые), в процентах. */
+  forfeitedPct: number;
 }
 
 function shortAddr(a: string): string {
@@ -101,13 +105,17 @@ export function toPayoutWeek(
   states: ReadonlyMap<string, PlayerState>,
 ): PayoutWeek {
   const rows = toPayoutRows(records, states);
-  const inMoney = rows.filter((r) => r.rank !== null);
+  const seated = rows.filter((r) => r.rank !== null);
+  // Платят только по местам с кошельком (правило 2026-07-28): место без кошелька занято,
+  // но его доля сгорает. Поэтому «занято мест» и «кому платим» — два разных числа, и
+  // показывать надо оба, иначе страница выглядит так, будто часть выплат потеряли.
+  const payable = seated.filter((r) => r.eligible);
   return {
     weekId,
     rows,
-    paidSeats: inMoney.length,
-    // Считаем только по местам в деньгах: хеш у строки вне призовой зоны означал бы
-    // выплату, которой не должно было быть, и такое лучше увидеть как расхождение.
-    paidTxCount: inMoney.filter((r) => r.payoutTx !== null && r.payoutTx !== "").length,
+    seats: seated.length,
+    paidSeats: payable.length,
+    paidTxCount: payable.filter((r) => r.payoutTx !== null && r.payoutTx !== "").length,
+    forfeitedPct: Math.round(forfeitedShare(records) * 1000) / 10,
   };
 }

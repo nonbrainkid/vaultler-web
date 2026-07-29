@@ -165,9 +165,11 @@ export default function Roadmap() {
 
             <p className="muted-note">
               The weight of rank N is <b>11 − N</b> and the weights always add up to 55, so
-              your share is <b>(11 − N) / 55</b> — check it yourself. Fewer than ten players
-              on the board and the same rule renormalises to the seats that exist. No volume,
-              no pool: rewards scale with real activity and are never guaranteed.
+              your share is <b>(11 − N) / 55</b> — check it yourself. These percentages are
+              fixed: rank 1 is 18.2% whether ten wallets show up or one. A seat held by a
+              player with no connected wallet is not redistributed and does not come back to
+              us — it is burned. No volume, no pool: rewards scale with real activity and are
+              never guaranteed.
             </p>
           </article>
         </div>

@@ -5,7 +5,9 @@ import {
   addressOf,
   closedWeekOf,
   finalizeWeekWithShares,
+  forfeitedShare,
   isPayoutEligible,
+  occupiesSeat,
 } from "./week-results";
 import { weekInfo } from "./week";
 
@@ -108,26 +110,57 @@ describe("isPayoutEligible", () => {
 describe("finalizeWeek", () => {
   const entry = (identity: string, gain: number) => ({ identity, gain });
 
-  it("места идут по приросту и только подтверждённым кошелькам", () => {
+  it("места идут по приросту, аноним место ЗАНИМАЕТ (правило 2026-07-28)", () => {
     const records = finalizeWeekWithShares(100, [
-      entry("dev:anon", 5_000), // выше всех в зачёте, но платить некуда
+      entry("dev:anon", 5_000), // выше всех в зачёте — значит и место первое
       entry(W(1), 900),
       entry(W(2), 400),
     ]);
 
     const anon = records.find((r) => r.identity === "dev:anon")!;
-    expect(anon.rank).toBeNull();
-    expect(anon.share).toBe(0);
-    expect(records.find((r) => r.identity === W(1))!.rank).toBe(1);
-    expect(records.find((r) => r.identity === W(2))!.rank).toBe(2);
+    expect(anon.rank).toBe(1);
+    expect(anon.eligible).toBe(false);
+    // Доля у места есть, но выплате она не подлежит — сгорает.
+    expect(anon.share).toBeCloseTo(10 / 55, 12);
+    expect(records.find((r) => r.identity === W(1))!.rank).toBe(2);
+    expect(records.find((r) => r.identity === W(2))!.rank).toBe(3);
   });
 
-  it("доли перенормируются на фактическое число мест и дают ровно 100%", () => {
+  it("доли НЕ перенормируются: процент на сайте и есть выплаченный", () => {
     const records = finalizeWeekWithShares(100, [entry(W(1), 300), entry(W(2), 200)]);
+    // Раньше при двух местах было 2/3 и 1/3. Теперь кривая из десяти мест фиксирована:
+    // первое всегда 18.2%, второе — 16.4%, сколько бы игроков ни пришло.
+    expect(records[0].share).toBeCloseTo(10 / 55, 12);
+    expect(records[1].share).toBeCloseTo(9 / 55, 12);
     const sum = records.reduce((s, r) => s + r.share, 0);
-    expect(sum).toBeCloseTo(1, 12);
-    // при двух местах веса 2 и 1 → 2/3 и 1/3
-    expect(records[0].share).toBeCloseTo(2 / 3, 12);
+    expect(sum).toBeLessThan(1);
+  });
+
+  it("сгоревшая доля: непривязанные места и незанятые места никому не достаются", () => {
+    const records = finalizeWeekWithShares(100, [
+      entry("dev:anon", 5_000), // место 1 — сгорает
+      entry(W(1), 900), // место 2 — выплачивается
+    ]);
+    // Выплачено только 9/55; остальное — доля анонима плюс восемь незанятых мест.
+    expect(forfeitedShare(records)).toBeCloseTo(1 - 9 / 55, 12);
+  });
+
+  it("кошелёк команды места не занимает — иначе команда сжигала бы долю за игроков", () => {
+    const team = W(9);
+    const excluded = new Set([team.slice("wallet:".length).toLowerCase()]);
+    const records = finalizeWeekWithShares(
+      100,
+      [entry(team, 9_000), entry(W(1), 100)],
+      excluded,
+    );
+    expect(records.find((r) => r.identity === team)!.rank).toBeNull();
+    expect(records.find((r) => r.identity === W(1))!.rank).toBe(1);
+  });
+
+  it("бот места не занимает: борд делит реальные токены", () => {
+    const records = finalizeWeekWithShares(100, [entry("bot:seed", 9_000), entry(W(1), 100)]);
+    expect(records.find((r) => r.identity === "bot:seed")!.rank).toBeNull();
+    expect(records.find((r) => r.identity === W(1))!.rank).toBe(1);
   });
 
   it("полная десятка: первое место 18.2%, десятое 1.8%", () => {

@@ -146,4 +146,19 @@ describe("свод недели", () => {
     const w = toPayoutWeek(2951, [rec({ share: 0.182 })], new Map());
     expect(w.rows[0].sharePct).toBe(18.2);
   });
+
+  it("место без кошелька занято, но не оплачивается — и это два разных числа", () => {
+    const w = toPayoutWeek(
+      2951,
+      [
+        rec({ identity: "dev:anon", address: null, rank: 1, share: 10 / 55, eligible: false }),
+        rec({ identity: "b", address: ADDR_B, rank: 2, share: 9 / 55, eligible: true }),
+      ],
+      new Map(),
+    );
+    expect(w.seats).toBe(2);
+    expect(w.paidSeats).toBe(1);
+    // Выплачено только 9/55 — остальное (доля анонима плюс восемь незанятых мест) сгорает.
+    expect(w.forfeitedPct).toBeCloseTo(Math.round((1 - 9 / 55) * 1000) / 10, 6);
+  });
 });

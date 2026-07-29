@@ -60,9 +60,17 @@ export default async function PayoutsPage() {
             <div className="card pay-note">
               <p>
                 The board resets every Saturday at 00:00 New York. The pool is half of what
-                the token&apos;s trading fees actually produced that week, split by the top
-                ten <b>connected wallets</b> on the board. Tokens are sent by hand, from
-                outside the site — there is no contract holding anyone&apos;s money.
+                the token&apos;s trading fees actually produced that week, and it is split by
+                the <b>top ten of the board</b> — rank 1 takes 18.2%, rank 10 takes 1.8%,
+                always. Tokens are sent by hand, from outside the site — there is no contract
+                holding anyone&apos;s money.
+              </p>
+              <p>
+                <b>A seat with no connected wallet is still a seat.</b> There is nowhere to
+                send those tokens, so that share is not handed to anyone else and does not
+                come back to us — it is burned. That is why the percentages on a week can add
+                up to less than 100%, and why connecting a wallet is the only thing standing
+                between a rank and a payout.
               </p>
               <p className="muted-note">
                 No volume, no pool. Rewards scale with real activity and are never
@@ -85,8 +93,14 @@ export default async function PayoutsPage() {
                 <article className="card pay-week" key={w.weekId}>
                   <h2 className="card-h gold">WEEK {w.weekId}</h2>
                   <p className="muted-note">
-                    {w.paidSeats} {w.paidSeats === 1 ? "seat" : "seats"} in the money ·{" "}
-                    {w.paidTxCount} of {w.paidSeats} confirmed on-chain
+                    {w.seats} {w.seats === 1 ? "seat" : "seats"} taken · {w.paidSeats} with a
+                    wallet · {w.paidTxCount} of {w.paidSeats} confirmed on-chain
+                    {w.forfeitedPct > 0 && (
+                      <>
+                        {" · "}
+                        <b>{w.forfeitedPct}% burned</b>
+                      </>
+                    )}
                   </p>
 
                   <div className="pay-scroll">

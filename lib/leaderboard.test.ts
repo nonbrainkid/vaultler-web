@@ -234,8 +234,9 @@ describe("buildLeaderboard", () => {
   it("отмечает «you» и отдаёт ранг игрока", () => {
     const lb = buildLeaderboard(snap, NOW, "dev:me");
     expect(lb.top.find((r) => r.isYou)?.stack).toBe(50);
-    // dev-сессия без кошелька: ранг есть, права на выплату нет
-    expect(lb.you).toEqual({ rank: 3, stack: 50, eligible: false, moneyRank: null });
+    // dev-сессия без кошелька: место в деньгах занимает, но права на выплату нет —
+    // его доля сгорает, а не переходит следующему (правило 2026-07-28).
+    expect(lb.you).toEqual({ rank: 3, stack: 50, eligible: false, moneyRank: 3 });
   });
 
   /**
@@ -251,18 +252,21 @@ describe("buildLeaderboard", () => {
       state: off(stack),
     });
 
-    it("аноним остаётся в общем зачёте, но места в деньгах не занимает", () => {
+    it("аноним ЗАНИМАЕТ место, но выплату не получает — доля сгорает (правило 2026-07-28)", () => {
       const lb = buildLeaderboard(
         [{ identity: "dev:anon", state: off(500) }, wallet(1, 100)],
         NOW,
         "x",
       );
       expect(lb.top[0].kind).toBe("anon");
-      expect(lb.top[0].rank).toBe(1); // в гонке он первый
+      expect(lb.top[0].rank).toBe(1);
+      // Место занято: доля первого места не переходит кошельку ниже, а сгорает.
+      expect(lb.top[0].moneyRank).toBe(1);
+      // Но платить некуда — это и есть разница между «занял место» и «получит токены».
       expect(lb.top[0].eligible).toBe(false);
-      expect(lb.top[0].moneyRank).toBeNull(); // но не в деньгах
-      // и первое призовое место достаётся кошельку, стоящему ниже в общем зачёте
-      expect(lb.top[1].moneyRank).toBe(1);
+      // Кошелёк снизу получает СВОЁ место, а не повышение за счёт анонима.
+      expect(lb.top[1].moneyRank).toBe(2);
+      expect(lb.top[1].eligible).toBe(true);
     });
 
     it("скрывший адрес получает выплату: адрес есть, наружу просто не отдаётся", () => {
@@ -301,7 +305,7 @@ describe("buildLeaderboard", () => {
      * десятое призовое место уезжает ниже десятой строки. Борд, обрезанный по limit,
      * подсвечивал бы «в деньгах» тех, кому не платят, и прятал тех, кому платят.
      */
-    it("список дотягивается до последнего призового места, если сверху анонимы", () => {
+    it("анонимы сверху занимают места, кошельки внизу денег не видят", () => {
       const anons: PlayerSnapshot[] = Array.from({ length: 6 }, (_, i) => ({
         identity: `dev:anon${i}`,
         state: off(10_000 - i),
@@ -309,18 +313,25 @@ describe("buildLeaderboard", () => {
       const wallets = Array.from({ length: 10 }, (_, i) => wallet(i + 1, 1000 - i));
       const lb = buildLeaderboard([...anons, ...wallets], NOW, "x");
 
-      expect(lb.top).toHaveLength(16); // 6 анонимов + все 10 оплачиваемых мест
+      // Места в деньгах — ровно первые десять строк борда, включая шестерых анонимов.
       expect(lb.top.filter((r) => r.moneyRank !== null)).toHaveLength(10);
-      expect(lb.top.at(-1)!.moneyRank).toBe(10); // последнее место в деньгах видно
+      expect(lb.top.slice(0, 6).every((r) => r.moneyRank !== null && !r.eligible)).toBe(true);
+      // Кошельки с седьмого по десятое место платятся, одиннадцатый и ниже — нет.
+      expect(lb.top[6].eligible).toBe(true);
+      expect(lb.top[9].moneyRank).toBe(10);
+      // Это и есть цена правила: шесть из десяти долей сгорят.
+      expect(lb.top.filter((r) => r.moneyRank !== null && !r.eligible)).toHaveLength(6);
     });
 
-    it("выдача не раздувается бесконечно, когда оплачиваемых мест не набирается", () => {
+    it("все места заняты анонимами — платить некому, доли сгорают целиком", () => {
       const anons: PlayerSnapshot[] = Array.from({ length: 30 }, (_, i) => ({
         identity: `dev:anon${i}`,
         state: off(100 - i),
       }));
       const lb = buildLeaderboard(anons, NOW, "x");
-      expect(lb.top).toHaveLength(10); // обычный limit, ни строкой больше
+      expect(lb.top).toHaveLength(10);
+      expect(lb.top.filter((r) => r.moneyRank !== null)).toHaveLength(10);
+      expect(lb.top.some((r) => r.eligible)).toBe(false);
     });
   });
 

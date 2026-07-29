@@ -21,7 +21,12 @@ import { parseExcluded } from "@/lib/leaderboard";
 import { payoutSharePct } from "@/lib/payout";
 import { getStore } from "@/lib/store";
 import { weekInfo } from "@/lib/week";
-import { addressOf, closedWeekOf, finalizeWeekWithShares } from "@/lib/week-results";
+import {
+  addressOf,
+  closedWeekOf,
+  finalizeWeekWithShares,
+  forfeitedShare,
+} from "@/lib/week-results";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -106,13 +111,22 @@ export async function POST(req: NextRequest) {
 
   if (!dryRun) await store.saveWeekResults(records);
 
-  const paid = records.filter((r) => r.rank !== null);
+  const seated = records.filter((r) => r.rank !== null);
+  // Платим ТОЛЬКО по местам с подтверждённым кошельком (правило 2026-07-28). Место без
+  // кошелька остаётся занятым, но в список выплат не попадает: его доля сгорает, а не
+  // достаётся соседу. Раньше здесь стоял просто `rank !== null`, и скрипт напечатал бы
+  // строку с `address: null` — то есть предложил бы отправить токены в никуда.
+  const paid = seated.filter((r) => r.eligible);
   return jsonNoStore({
     ok: true,
     dryRun,
     weekId,
     participants: records.length,
-    seats: paid.length,
+    seats: seated.length,
+    paidSeats: paid.length,
+    // Доля пула, которая никому не уходит: места без кошелька плюс незанятые места.
+    // Округляем до десятой процента — так же, как показано на сайте.
+    forfeitedPct: Math.round(forfeitedShare(records) * 1000) / 10,
     // Наружу — только адреса: internal id не отдаём даже админскому клиенту, чтобы
     // формат идентичности не расползался по скриптам и логам.
     payouts: paid.map((r) => ({
@@ -120,7 +134,7 @@ export async function POST(req: NextRequest) {
       address: r.address,
       gain: Math.floor(r.gain),
       share: r.share,
-      sharePct: payoutSharePct(r.rank!, paid.length),
+      sharePct: payoutSharePct(r.rank!),
     })),
     // Сколько игроков осталось без выплаты только из-за отсутствия кошелька — это метрика
     // для community-работы: столько людей играли, но получить ничего не могут.

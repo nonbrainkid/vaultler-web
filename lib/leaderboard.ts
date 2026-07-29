@@ -11,7 +11,7 @@ import { settle, type PlayerState } from "./game";
 import { addressFromIdentity } from "./auth";
 import { PAYOUT_SEATS } from "./payout";
 import type { PlayerSnapshot } from "./store";
-import { isPayoutEligible } from "./week-results";
+import { isPayoutEligible, occupiesSeat } from "./week-results";
 import { weekInfo, type WeekInfo } from "./week";
 
 export { weekInfo };
@@ -38,9 +38,10 @@ export interface LeaderRow {
   /**
    * Место в призовой зоне (1…10) или null, если вне денег.
    *
-   * НЕ равно `rank`: призовые места считаются по первым `PAYOUT_SEATS` подтверждённым
-   * кошелькам, а в общем зачёте выше может стоять аноним. Так на борде честно видно и
-   * гонку целиком, и то, кому реально уйдут токены.
+   * С 2026-07-28 место занимает и аноним, поэтому для верхних строк `moneyRank` совпадает
+   * с `rank`. Расходятся они там, где выше стоят боты или кошельки команды: те мест не
+   * занимают вовсе. `eligible` при этом отвечает на другой вопрос — заплатят ли по этому
+   * месту или его доля сгорит.
    */
   moneyRank: number | null;
 }
@@ -159,14 +160,17 @@ export function buildLeaderboard(
   // комьюнити настакало вообще, и обнулять её каждую субботу бессмысленно.
   const communalVault = live.reduce((sum, p) => sum + p.lifetimeStack, 0);
 
-  // Раздача призовых мест идёт сверху вниз по борду, но занимают их только подтверждённые
-  // кошельки: анонимной сессии платить некуда, а завести её можно бесплатно и сколько
-  // угодно раз. Нулевой прирост места не занимает — платить за неучастие не за что,
-  // иначе пустые сессии добирали бы хвост десятки.
+  // Призовые места раздаются сверху вниз по борду ВСЕМ, включая анонимов (правило
+  // 2026-07-28): так процент на сайте становится буквально выплаченным процентом. Доля
+  // места без кошелька не переходит соседям — она сгорает (lib/week-results.ts).
+  // Нулевой прирост места не занимает: платить за неучастие не за что, иначе пустые
+  // сессии добирали бы хвост десятки просто фактом существования.
   let seat = 0;
   const seated = live.map((p) => {
     const eligible = isPayoutEligible(p.identity);
-    const inMoney = eligible && p.stack > 0 && seat < PAYOUT_SEATS;
+    // Место занимает и аноним (правило 2026-07-28): его доля не переходит другим, а
+    // сгорает. `eligible` отвечает только на вопрос «заплатят ли», а не «занял ли место».
+    const inMoney = occupiesSeat(p.identity) && p.stack > 0 && seat < PAYOUT_SEATS;
     return { ...p, eligible, moneyRank: inMoney ? ++seat : null };
   });
 
