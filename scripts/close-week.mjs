@@ -18,8 +18,27 @@ const base = (process.env.VAULTLER_URL || "http://localhost:3000").replace(/\/$/
 const secret = process.env.ADMIN_SECRET || "";
 
 if (!secret) {
-  console.error("ADMIN_SECRET не задан в окружении.");
+  console.error(
+    "ADMIN_SECRET не задан.\n\n" +
+      "Он живёт в env Vercel, а этот скрипт работает с твоей машины — значит нужен и\n" +
+      "локально. Впиши его строкой в .env.local (файл в .gitignore и покрыт\n" +
+      "`npm run check:secrets`), скрипт подхватит сам:\n\n" +
+      "  ADMIN_SECRET=…\n\n" +
+      "Инлайном в командную строку не передавай: оттуда секрет оседает в истории шелла\n" +
+      "и виден в списке процессов.",
+  );
   process.exit(2);
+}
+
+if (base.includes("localhost") || base.includes("127.0.0.1")) {
+  // Против localhost скрипт закроет НЕ ту неделю: в dev работает файловый стор с
+  // тестовыми игроками, а список победителей нужен из прод-базы. Предупреждаем явно —
+  // молча отработавший dry-run на пустом сторе выглядит как «победителей нет».
+  console.warn(
+    `⚠ VAULTLER_URL = ${base}\n` +
+      "  Это локальный сервер с файловым стором, а не прод. Для настоящего прогона:\n" +
+      "  VAULTLER_URL=https://thevaultler.fun npm run close:week -- --dry\n",
+  );
 }
 
 const args = process.argv.slice(2);
