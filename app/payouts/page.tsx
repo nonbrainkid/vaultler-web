@@ -16,7 +16,9 @@ const EXPLORER = (process.env.NEXT_PUBLIC_RH_EXPLORER || "").replace(/\/$/, "");
 const WEEKS_SHOWN = 12;
 
 export const metadata: Metadata = {
-  title: "Payouts — THE VAULTLER",
+  // Без бренда в конце: layout добавляет его сам шаблоном «%s · The Vaultler», иначе
+  // во вкладке получается «Payouts — THE VAULTLER · The Vaultler».
+  title: "Payouts",
   description:
     "Every weekly pool, every winner, every transaction hash. The post scrolls away; this page does not.",
 };
@@ -24,6 +26,17 @@ export const metadata: Metadata = {
 function fmtStack(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: n < 100 ? 2 : 0 });
 }
+
+/**
+ * Дата сброса словами, в зоне борда. Считается из `weekInfo`, а НЕ вписана строкой:
+ * «August 1» протухнет через неделю и превратит страницу доказательств в страницу
+ * с устаревшим обещанием — то есть ровно в то, чего она должна избегать.
+ */
+const RESET_DATE = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  month: "long",
+  day: "numeric",
+});
 
 async function loadWeeks(): Promise<PayoutWeek[]> {
   const store = await getStore();
@@ -61,7 +74,8 @@ export default async function PayoutsPage() {
               <p>
                 The board resets every Saturday at 00:00 New York. The pool is half of what
                 the token&apos;s trading fees actually produced that week, and it is split by
-                the <b>top ten of the board</b> — rank 1 takes 18.2%, rank 10 takes 1.8%,
+                the <b>top ten of the board</b>{" "}
+                — rank 1 takes 18.2%, rank 10 takes 1.8%,
                 always. Tokens are sent by hand, from outside the site — there is no contract
                 holding anyone&apos;s money.
               </p>
@@ -82,10 +96,18 @@ export default async function PayoutsPage() {
               <div className="card pay-empty">
                 <h2 className="card-h gold">NOTHING PAID YET</h2>
                 <p>
-                  Week {next.weekId} is still running. When it closes, the standings and the
-                  transaction hashes land here — including the weeks where the pool turns out
-                  to be dust. We publish the small ones too; that is the whole point of
-                  having a page instead of a promise.
+                  Week {next.weekId} is still running. It closes{" "}
+                  <b>{RESET_DATE.format(new Date(next.endsAt))}, 00:00 New York</b> — the
+                  first payout follows that reset, and the standings and transaction hashes
+                  land on this page shortly after.
+                </p>
+                <p>
+                  Shortly, not instantly: tokens are sent by hand, from outside the site.
+                  That is the trade for having no contract hold anyone&apos;s money.
+                </p>
+                <p className="muted-note">
+                  We will publish the small weeks too. A pool of dust still gets a receipt —
+                  that is the entire point of having a page instead of a promise.
                 </p>
               </div>
             ) : (
