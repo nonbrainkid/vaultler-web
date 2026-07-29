@@ -10,31 +10,43 @@
  *     к остальной экономике проекта.
  */
 import { PAYOUT_SEATS, PAYOUT_SHARES, payoutSharePct } from "@/lib/payout";
+import { TELEGRAM_BOT_USERNAME } from "@/lib/links";
 
 const LIVE = [
   { t: "The daily game", d: "Free, no wallet needed." },
   { t: "Server-side scoring", d: "Your stack lives on our server, not in your browser." },
   { t: "Weekly board", d: "Resets Saturday 00:00 New York, plus the community vault." },
   { t: "$VLTR trading", d: "Holder ladder ×1.5 to ×5, re-checked on every crank." },
+  {
+    // Username берём из той же константы, что и ссылка «REMINDER BOT» в шапке и deep link
+    // привязки (lib/links.ts). Два разных значения означали бы, что сайт называет одного
+    // бота, а привязка идёт к другому, — этим и живут клоны.
+    t: "Window reminders",
+    d: `Two messages a day from @${TELEGRAM_BOT_USERNAME}: the window opened, and two hours before the raider. Works without a wallet. It can never touch yours.`,
+  },
+  {
+    t: "A payouts page",
+    d: "Every week, every winner, every transaction hash, at a permanent link.",
+  },
+  {
+    t: "Streak badges",
+    d: "3, 7, 14 and 30 days in a row. Earned by showing up — there is no way to buy one.",
+  },
 ];
 
 const NEXT = [
   {
-    t: "Window reminders",
-    d: "The whole game depends on you coming back inside a 12h window, and right now nothing tells you it opened. A Telegram bot will ping you when it opens and again before it closes.",
-    first: true,
-  },
-  {
-    t: "A payouts page",
-    d: "Every week, every winner, every transaction, at a permanent link. Receipts, not promises.",
-  },
-  {
     t: "Board history",
     d: "Past weeks and past winners, so the game accumulates a story instead of resetting into a void.",
+    first: true,
   },
   {
     t: "Shareable stack cards",
     d: "One button turns your stack, streak, rank and safe skin into an image worth posting.",
+  },
+  {
+    t: "A phone-shaped game",
+    d: "This is a once-a-day ritual, so it belongs on a home screen rather than in a browser tab.",
   },
 ];
 
