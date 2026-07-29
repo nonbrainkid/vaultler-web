@@ -1900,6 +1900,64 @@ a.addrlink:focus-visible {
   }
 }
 
+/* ───────────── /payouts ───────────── */
+.pay-note,
+.pay-empty,
+.pay-week {
+  margin-bottom: 16px;
+}
+.pay-note p + p {
+  margin-top: 10px;
+}
+.mono {
+  font-family: var(--read);
+  color: var(--muted);
+}
+/* Таблица шире экрана прокручивается ВНУТРИ своего контейнера: горизонтальная прокрутка
+   всей страницы на телефоне ломает вертикальный скролл пальцем. */
+.pay-scroll {
+  overflow-x: auto;
+  margin-top: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.pay-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+  font-size: 15px;
+}
+.pay-table th,
+.pay-table td {
+  text-align: left;
+  padding: 9px 12px 9px 0;
+  border-bottom: 2px solid var(--wood-dark);
+  white-space: nowrap;
+}
+.pay-table th {
+  font-family: var(--pixel);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+/* Места в деньгах выделены: это первое, что ищут глазами на странице выплат. */
+.pay-table tr.is-money td {
+  color: var(--bone);
+}
+.pay-table tr:not(.is-money) td {
+  color: var(--muted);
+}
+.pay-tag {
+  display: inline-block;
+  margin-left: 8px;
+  font-family: var(--pixel);
+  font-size: 7px;
+  color: var(--muted);
+  border: 2px solid currentColor;
+  padding: 2px 4px;
+  vertical-align: middle;
+}
+
 /* ───────────── reduced motion ───────────── */
 @media (prefers-reduced-motion: reduce) {
   html {

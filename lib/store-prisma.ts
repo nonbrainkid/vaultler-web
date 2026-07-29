@@ -247,6 +247,18 @@ export class PrismaStore implements Store {
     }));
   }
 
+  async closedWeekIds(limit: number): Promise<number[]> {
+    // distinct по weekId вместо выгрузки всех строк: таблица растёт бессрочно, а странице
+    // нужен только список номеров. Индекс `@@index([weekId, rank])` покрывает сортировку.
+    const rows = await prisma.weekResult.findMany({
+      distinct: ["weekId"],
+      select: { weekId: true },
+      orderBy: { weekId: "desc" },
+      take: Math.max(1, Math.trunc(limit)),
+    });
+    return rows.map((r) => r.weekId);
+  }
+
   async linkTelegram(identity: string, chatId: number): Promise<LinkTelegramResult> {
     return prisma.$transaction(async (tx) => {
       const byIdentity = await tx.telegramLink.findUnique({ where: { identity } });

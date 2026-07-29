@@ -265,6 +265,14 @@ export class FileStore implements Store {
     });
   }
 
+  async closedWeekIds(limit: number): Promise<number[]> {
+    return this.withQueue(async () => {
+      const all = await this.readWeeks();
+      const ids = [...new Set(all.map((r) => r.weekId))].sort((a, b) => b - a);
+      return ids.slice(0, Math.max(1, Math.trunc(limit)));
+    });
+  }
+
   /** Прочитать привязки Telegram. Файла нет/битый → пусто (dev-стор). */
   private async readTelegramLinks(): Promise<TelegramBinding[]> {
     try {
