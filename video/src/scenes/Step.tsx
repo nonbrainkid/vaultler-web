@@ -24,30 +24,47 @@ const StepArt: React.FC<{ n: string }> = ({ n }) => {
       extrapolateRight: "clamp",
     });
     return (
-      <div style={{ position: "relative", display: "grid", placeItems: "center" }}>
-        <SafeSprite level={2} dialAngle={spin} size={size} />
-        {/* рычаг: дёрнули вниз и он вернулся — «одно нажатие в сутки» */}
+      // Колонка, а не absolute-подпись поверх спрайта: подпись в PIXEL переносится по
+      // словам, и в узком кадре 1:1 вторая строка наезжала на корпус сейфа.
+      <div style={{ display: "grid", justifyItems: "center", gap: 1.4 * u }}>
+        <div style={{ position: "relative", width: size, height: size }}>
+          <SafeSprite level={2} dialAngle={spin} size={size} />
+          {/* Рычаг привязан к ПРАВОЙ КРОМКЕ корпуса (в спрайте 32×32 ручка на x=29…30),
+              иначе он висит в воздухе отдельной красной палкой. Дёрнули вниз — вернулся:
+              «одно нажатие в сутки». */}
+          <div
+            style={{
+              position: "absolute",
+              left: size * 0.945,
+              top: size * 0.44,
+              width: size * 0.035,
+              height: size * 0.26,
+              background: C.rustHi,
+              transformOrigin: "top center",
+              transform: `rotate(${lever}deg)`,
+              boxShadow: GLOW.rust,
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                left: size * -0.018,
+                bottom: size * -0.035,
+                width: size * 0.07,
+                height: size * 0.07,
+                background: C.rust,
+                border: `${size * 0.012}px solid ${C.rustHi}`,
+              }}
+            />
+          </div>
+        </div>
         <div
           style={{
-            position: "absolute",
-            right: -2 * u,
-            top: "42%",
-            width: 1.1 * u,
-            height: 7 * u,
-            background: C.rustHi,
-            transformOrigin: "top center",
-            transform: `rotate(${lever}deg)`,
-            boxShadow: GLOW.rust,
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            bottom: -3 * u,
             fontFamily: PIXEL,
-            fontSize: 1.9 * u,
+            fontSize: 1.7 * u,
             color: C.neon,
             textShadow: GLOW.neon,
+            whiteSpace: "nowrap",
           }}
         >
           + $STACK / 24H

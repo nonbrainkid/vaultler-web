@@ -10,9 +10,14 @@ import { TICKER, TIERS } from "../copy";
  * ЭМИССИИ, а не от размера бэга в токенах, и верх ограничен ×5. Это же и защита от
  * претензии «купи побольше и владей бордом»: потолок виден прямо в кадре.
  */
+/** Самое длинное имя тира — «PROSPECTOR», 10 знаков; +1 знак запаса на кернинг. */
+const NAME_COLS = 11;
+
 export const Ladder: React.FC = () => {
   const frame = useCurrentFrame();
   const { u, vertical } = useLayout();
+  const NAME_FS = vertical ? 1.35 : 1.5;
+  const MULT_FS = vertical ? 1.7 : 2;
 
   return (
     <AbsoluteFill>
@@ -68,12 +73,18 @@ export const Ladder: React.FC = () => {
                     opacity: 0.25 + grow * 0.75,
                   }}
                 >
+                  {/* Ширина колонки считается от САМОГО ДЛИННОГО имени тира, а не на глаз.
+                      В Press Start 2P ширина глифа ровно 1em, поэтому 10 символов
+                      «PROSPECTOR» занимают 10 × fontSize — при фиксированных 13u текст
+                      вылезал на колонку с долей эмиссии. */}
                   <span
                     style={{
                       fontFamily: PIXEL,
-                      fontSize: (vertical ? 1.5 : 1.6) * u,
+                      fontSize: NAME_FS * u,
                       color,
-                      width: 13 * u,
+                      width: NAME_COLS * NAME_FS * u,
+                      flexShrink: 0,
+                      whiteSpace: "nowrap",
                       textShadow: top ? GLOW.gold : "none",
                     }}
                   >
@@ -85,6 +96,8 @@ export const Ladder: React.FC = () => {
                       fontSize: 2.4 * u,
                       color: C.muted,
                       width: 9 * u,
+                      flexShrink: 0,
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {t.share}
@@ -111,12 +124,15 @@ export const Ladder: React.FC = () => {
                       }}
                     />
                   </div>
+                  {/* «×3.75» — 5 знаков, каждый шириной в 1em: колонка не может быть уже. */}
                   <span
                     style={{
                       fontFamily: PIXEL,
-                      fontSize: (vertical ? 1.8 : 2) * u,
+                      fontSize: MULT_FS * u,
                       color,
-                      width: 6.5 * u,
+                      width: 5.4 * MULT_FS * u,
+                      flexShrink: 0,
+                      whiteSpace: "nowrap",
                       textAlign: "right",
                       textShadow: top ? GLOW.gold : "none",
                     }}

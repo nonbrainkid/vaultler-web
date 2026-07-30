@@ -34,8 +34,10 @@ export const Vibe: React.FC = () => {
             </p>
           </Reveal>
 
-          {/* два графика: тонущий трейдер и растущий стакер */}
-          <Reveal delay={8}>
+          {/* Два графика: тонущий трейдер и растущий стакер. Нижний отступ — не косметика:
+              у слогана под ним крупное неоновое свечение, и без зазора оно ложится
+              на основания столбиков. */}
+          <Reveal delay={8} style={{ marginBottom: 1.2 * u }}>
             <div style={{ display: "flex", gap: 4 * u, alignItems: "flex-end" }}>
               {[
                 { color: C.rustHi, dir: -1 },

@@ -12,6 +12,14 @@ import { useVideoConfig } from "remotion";
  */
 export interface Layout {
   u: number;
+  /**
+   * Колоночная раскладка вместо строчной.
+   *
+   * Считается по СООТНОШЕНИЮ СТОРОН, а не по `height > width`. Квадрат 1:1 при
+   * проверке «выше, чем шире» проваливался в горизонтальную ветку и раскладывал
+   * текст и спрайт сейфа в строку — в кадр шириной 100u это не влезает, и блоки
+   * наезжали друг на друга. Порог 1.25 отправляет 1:1 в ту же колонку, что и 9:16.
+   */
   vertical: boolean;
   /** Ширина контентной колонки в юнитах — аналог `.shell` на сайте. */
   shell: number;
@@ -22,8 +30,18 @@ export interface Layout {
 
 export const useLayout = (): Layout => {
   const { width, height, fps } = useVideoConfig();
-  const u = Math.min(width, height) / 100;
-  const vertical = height > width;
+  const ratio = width / height;
+  const vertical = ratio < 1.25;
+
+  /**
+   * Квадрат — самый тесный формат: ширина у него как у вертикали (100u), а высота
+   * вдвое меньше (100u против 178u). Колоночная раскладка, рассчитанная на 9:16,
+   * упирается в нижний край. Общий коэффициент 0.86 ужимает всю сцену целиком —
+   * это один честный регулятор вместо десятка правок размеров по сценам.
+   */
+  const squareish = vertical && ratio > 0.85;
+  const u = (Math.min(width, height) / 100) * (squareish ? 0.86 : 1);
+
   return {
     u,
     vertical,
