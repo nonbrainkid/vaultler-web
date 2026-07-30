@@ -1,16 +1,27 @@
 /**
  * Конфиг сети Robinhood Chain (Arbitrum Orbit L2) и токена $VLTR.
  *
- * ВСЕ значения берутся из env — реальные RPC/chainId/адрес токена подставим позже
- * (доки Robinhood Chain отложены, см. NOTES.md → открытые вопросы). Плейсхолдеры, чтобы весь
- * флоу кошелька собирался и тестировался off-chain (подпись сообщения сети не требует).
+ * Значения по умолчанию держим В КОДЕ (как и адрес токена ниже, по той же причине):
+ * chainId, RPC и explorer — публичные факты сети, а не секреты, и опечатка в текстовом поле
+ * панели Vercel уехала бы в прод без диффа и ревью. Env-переопределение оставлено для
+ * локального anvil и тестовых сетей.
+ *
+ * Мейннет живой с 2026-07-01. Значения сверены 2026-07-30 напрямую: публичный RPC на
+ * `eth_chainId` отвечает `0x1237` = 4663 (в коде до этого стоял плейсхолдер 88991 из
+ * времён, когда доки сети были недоступны).
  */
 import { defineChain, getAddress, isAddress } from "viem";
 
-const CHAIN_ID = Number(process.env.NEXT_PUBLIC_RH_CHAIN_ID ?? "88991"); // PLACEHOLDER
-const RPC_URL = process.env.NEXT_PUBLIC_RH_RPC_URL ?? ""; // пусто → чтение баланса выключено
+const CHAIN_ID = Number(process.env.NEXT_PUBLIC_RH_CHAIN_ID ?? "4663");
+/**
+ * Публичный RPC сети — ключа не требует. Раньше дефолтом было пусто, и это выключало чтение
+ * чейна (`VLTR_CONFIGURED`) везде, кроме прода, где значение задано в env: dev и прод
+ * расходились в самой чувствительной части — расчёте холдерского буста. Отключить чтение
+ * по-прежнему можно, задав переменную ПУСТОЙ строкой (нужно тестам, работающим без сети).
+ */
+const RPC_URL = process.env.NEXT_PUBLIC_RH_RPC_URL ?? "https://rpc.mainnet.chain.robinhood.com";
 const CHAIN_NAME = process.env.NEXT_PUBLIC_RH_NAME ?? "Robinhood Chain";
-const EXPLORER = process.env.NEXT_PUBLIC_RH_EXPLORER ?? "";
+const EXPLORER = process.env.NEXT_PUBLIC_RH_EXPLORER ?? "https://robinhoodchain.blockscout.com";
 
 export const robinhoodChain = defineChain({
   id: CHAIN_ID,
@@ -22,7 +33,7 @@ export const robinhoodChain = defineChain({
   blockExplorers: EXPLORER
     ? { default: { name: "Explorer", url: EXPLORER } }
     : undefined,
-  testnet: true,
+  testnet: false,
 });
 
 /**

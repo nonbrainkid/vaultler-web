@@ -35,10 +35,10 @@
 | Переменная | Дефолт | Смысл |
 |---|---|---|
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` | OG-картинка, sitemap, robots |
-| `NEXT_PUBLIC_RH_CHAIN_ID` | `88991` (PLACEHOLDER) | chainId Robinhood Chain |
-| `NEXT_PUBLIC_RH_RPC_URL` | пусто | пусто → чтение баланса выключено |
+| `NEXT_PUBLIC_RH_CHAIN_ID` | `4663` в `lib/chain.ts` | chainId Robinhood Chain (`0x1237`, сверен по RPC 30.07) |
+| `NEXT_PUBLIC_RH_RPC_URL` | `https://rpc.mainnet.chain.robinhood.com` | публичный RPC, ключа не требует. **Пустая строка** выключает чтение чейна (нужно тестам без сети) |
 | `NEXT_PUBLIC_RH_NAME` | `Robinhood Chain` | подпись сети в UI |
-| `NEXT_PUBLIC_RH_EXPLORER` | пусто | ссылки на адреса в борде |
+| `NEXT_PUBLIC_RH_EXPLORER` | `https://robinhoodchain.blockscout.com` | ссылки на адреса в борде |
 | `NEXT_PUBLIC_VLTR_ADDRESS` | реальный адрес в `lib/chain.ts` | переопределение адреса токена (тестовая сеть / anvil). Дефолт держим в коде: адрес публичен, а опечатка в поле панели уехала бы в прод без ревью |
 | `NEXT_PUBLIC_VLTR_DECIMALS` | `18` | десятичные |
 | `NEXT_PUBLIC_VLTR_BOOST_MIN` | `1` | абсолютный анти-дуст-минимум. Сам множитель задаётся долей в эмиссии (`HOLDER_TIERS`), см. `docs/game-mechanics.md` |
