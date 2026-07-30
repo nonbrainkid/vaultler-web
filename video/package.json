@@ -1,0 +1,26 @@
+{
+  "name": "vaultler-video",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Промо-ролик The Vaultler на Remotion. Отдельный пакет: рендер-тулчейн (Chrome Headless, esbuild) не должен попадать в зависимости Next-приложения.",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render VaultlerLandscape out/vaultler-16x9.mp4",
+    "render:vertical": "remotion render VaultlerVertical out/vaultler-9x16.mp4",
+    "render:square": "remotion render VaultlerSquare out/vaultler-1x1.mp4",
+    "render:all": "npm run render && npm run render:vertical && npm run render:square",
+    "still": "remotion still VaultlerLandscape out/poster.png --frame=60"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@remotion/google-fonts": "^4.0.0",
+    "@remotion/transitions": "^4.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "typescript": "^5"
+  }
+}
