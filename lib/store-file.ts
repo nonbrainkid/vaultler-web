@@ -22,6 +22,7 @@ import type {
   MutateOutcome,
   PlayerSnapshot,
   ProfilePatch,
+  PushSubscriptionRecord,
   SetProfileResult,
   Store,
   TelegramBinding,
@@ -47,6 +48,12 @@ export class FileStore implements Store {
    * players.json сломало бы схему, которую построчно читает hydrateState.
    */
   private telegramFile = path.join(process.cwd(), ".data", "telegram-links.json");
+  /**
+   * Подписки на веб-пуши — отдельным файлом по той же причине, что и привязки Telegram:
+   * это не `PlayerState`, и подмешивание сломало бы схему, которую построчно читает
+   * `hydrateState`. Без этого файла разработка веб-пушей требовала бы Postgres.
+   */
+  private pushFile = path.join(process.cwd(), ".data", "push-subscriptions.json");
   /** Отпечаток файла на момент последнего чтения: несовпадение = копия в памяти устарела. */
   private stamp: string | null = null;
   /**
@@ -203,6 +210,23 @@ export class FileStore implements Store {
     });
   }
 
+  async playerByNickname(nick: string): Promise<PlayerSnapshot | null> {
+    const key = nicknameKey(nick);
+    if (key === "") return null;
+    return this.withQueue(async () => {
+      await this.ensureFresh();
+      for (const [identity, state] of Object.entries(this.data!)) {
+        // Сравниваем по тому же ключу, по которому проверяется уникальность, — иначе
+        // `/u/Egor` находил бы игрока, а `/u/egor` нет (или наоборот), хотя занять оба
+        // ника нельзя.
+        if (state.nickname && nicknameKey(state.nickname) === key) {
+          return { identity, state: { ...state } };
+        }
+      }
+      return null;
+    });
+  }
+
   async setProfile(
     identity: string,
     now: number,
@@ -339,5 +363,82 @@ export class FileStore implements Store {
 
   async telegramLinks(): Promise<TelegramBinding[]> {
     return this.withQueue(async () => (await this.readTelegramLinks()).map((r) => ({ ...r })));
+  }
+
+  /** Прочитать подписки на веб-пуши. Файла нет/битый → пусто (dev-стор). */
+  private async readPushSubs(): Promise<PushSubscriptionRecord[]> {
+    try {
+      const raw = JSON.parse(await fs.readFile(this.pushFile, "utf8"));
+      return Array.isArray(raw) ? (raw as PushSubscriptionRecord[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writePushSubs(all: readonly PushSubscriptionRecord[]): Promise<void> {
+    await fs.mkdir(path.dirname(this.pushFile), { recursive: true });
+    await fs.writeFile(this.pushFile, JSON.stringify(all, null, 2));
+  }
+
+  async savePushSubscription(
+    identity: string,
+    sub: { endpoint: string; p256dh: string; auth: string },
+    now: number,
+  ): Promise<void> {
+    return this.withQueue(async () => {
+      const all = await this.readPushSubs();
+      const i = all.findIndex((r) => r.endpoint === sub.endpoint);
+      if (i >= 0) {
+        // Тот же браузер: перевешиваем на текущий identity (мог войти кошельком) и
+        // обнуляем счётчик неудач — подписка только что подтверждена живой.
+        all[i] = { ...all[i], identity, p256dh: sub.p256dh, auth: sub.auth, failures: 0 };
+      } else {
+        all.push({ identity, ...sub, failures: 0, createdAt: now });
+      }
+      await this.writePushSubs(all);
+    });
+  }
+
+  async deletePushSubscription(identity: string, endpoint: string): Promise<boolean> {
+    return this.withQueue(async () => {
+      const all = await this.readPushSubs();
+      // Проверка владельца — та же, что в Prisma-сторе: endpoint приходит из тела запроса.
+      const next = all.filter((r) => !(r.endpoint === endpoint && r.identity === identity));
+      if (next.length === all.length) return false;
+      await this.writePushSubs(next);
+      return true;
+    });
+  }
+
+  async deletePushSubscriptionByEndpoint(endpoint: string): Promise<boolean> {
+    return this.withQueue(async () => {
+      const all = await this.readPushSubs();
+      const next = all.filter((r) => r.endpoint !== endpoint);
+      if (next.length === all.length) return false;
+      await this.writePushSubs(next);
+      return true;
+    });
+  }
+
+  async countPushSubscriptions(identity: string): Promise<number> {
+    return this.withQueue(async () =>
+      (await this.readPushSubs()).filter((r) => r.identity === identity).length,
+    );
+  }
+
+  async pushSubscriptions(): Promise<PushSubscriptionRecord[]> {
+    return this.withQueue(async () => (await this.readPushSubs()).map((r) => ({ ...r })));
+  }
+
+  async notePushResult(endpoint: string, ok: boolean): Promise<number> {
+    return this.withQueue(async () => {
+      const all = await this.readPushSubs();
+      const i = all.findIndex((r) => r.endpoint === endpoint);
+      if (i < 0) return 0;
+      const failures = ok ? 0 : all[i].failures + 1;
+      all[i] = { ...all[i], failures };
+      await this.writePushSubs(all);
+      return failures;
+    });
   }
 }

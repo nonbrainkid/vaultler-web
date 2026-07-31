@@ -12,6 +12,7 @@ import type {
   MutateOutcome,
   PlayerSnapshot,
   ProfilePatch,
+  PushSubscriptionRecord,
   SetProfileResult,
   Store,
   TelegramBinding,
@@ -148,6 +149,17 @@ export class PrismaStore implements Store {
   async snapshot(): Promise<PlayerSnapshot[]> {
     const rows = (await prisma.player.findMany()) as (Row & { identity: string })[];
     return rows.map((r) => ({ identity: r.identity, state: toState(r) }));
+  }
+
+  async playerByNickname(nick: string): Promise<PlayerSnapshot | null> {
+    const key = nicknameKey(nick);
+    // Пустой ключ в findUnique по nullable-уникальному полю нашёл бы «первого без ника».
+    if (key === "") return null;
+    // findUnique по `nicknameKey` — колонка уже @unique, отдельный индекс не нужен.
+    const row = (await prisma.player.findUnique({
+      where: { nicknameKey: key },
+    })) as (Row & { identity: string }) | null;
+    return row ? { identity: row.identity, state: toState(row) } : null;
   }
 
   async setProfile(
@@ -318,5 +330,73 @@ export class PrismaStore implements Store {
   async telegramLinks(): Promise<TelegramBinding[]> {
     const rows = await prisma.telegramLink.findMany();
     return rows.map((r) => ({ identity: r.identity, chatId: Number(r.chatId) }));
+  }
+
+  async savePushSubscription(
+    identity: string,
+    sub: { endpoint: string; p256dh: string; auth: string },
+    _now: number,
+  ): Promise<void> {
+    // upsert по endpoint'у: тот же браузер, вошедший кошельком, перевешивается на новый
+    // identity одной записью, а не плодит вторую подписку на то же устройство.
+    // `failures: 0` — подписку только что подтвердил живой браузер.
+    await prisma.pushSubscription.upsert({
+      where: { endpoint: sub.endpoint },
+      create: { identity, endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+      update: { identity, p256dh: sub.p256dh, auth: sub.auth, failures: 0 },
+    });
+  }
+
+  async deletePushSubscription(identity: string, endpoint: string): Promise<boolean> {
+    // deleteMany с обоими условиями, а не delete по уникальному endpoint'у: владелец
+    // проверяется в самом запросе, поэтому чужую подписку этим роутом не удалить даже при
+    // ошибке в вызывающем коде.
+    const res = await prisma.pushSubscription.deleteMany({ where: { endpoint, identity } });
+    return res.count > 0;
+  }
+
+  async deletePushSubscriptionByEndpoint(endpoint: string): Promise<boolean> {
+    const res = await prisma.pushSubscription.deleteMany({ where: { endpoint } });
+    return res.count > 0;
+  }
+
+  async countPushSubscriptions(identity: string): Promise<number> {
+    return prisma.pushSubscription.count({ where: { identity } });
+  }
+
+  async pushSubscriptions(): Promise<PushSubscriptionRecord[]> {
+    const rows = await prisma.pushSubscription.findMany();
+    return rows.map((r) => ({
+      identity: r.identity,
+      endpoint: r.endpoint,
+      p256dh: r.p256dh,
+      auth: r.auth,
+      failures: r.failures,
+      createdAt: r.createdAt.getTime(),
+    }));
+  }
+
+  async notePushResult(endpoint: string, ok: boolean): Promise<number> {
+    if (ok) {
+      // updateMany, а не update: подписки может уже не быть, и это не повод бросать.
+      await prisma.pushSubscription.updateMany({ where: { endpoint }, data: { failures: 0 } });
+      return 0;
+    }
+    try {
+      // Инкремент на стороне БД, а не «прочитать-посчитать-записать»: два параллельных
+      // прогона рассылки иначе затёрли бы счётчик друг друга и подписка жила бы вечно.
+      const row = await prisma.pushSubscription.update({
+        where: { endpoint },
+        data: { failures: { increment: 1 } },
+        select: { failures: true },
+      });
+      return row.failures;
+    } catch (e) {
+      // P2025 — записи уже нет (её удалил параллельный прогон). Не ошибка.
+      if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "P2025") {
+        return 0;
+      }
+      throw e;
+    }
   }
 }

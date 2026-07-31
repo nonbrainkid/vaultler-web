@@ -1,5 +1,12 @@
 /**
- * POST /api/telegram/remind — рассылка напоминаний по расписанию.
+ * POST /api/telegram/remind — рассылка напоминаний по расписанию. ОБА КАНАЛА: Telegram-бот
+ * и веб-пуши (PWA).
+ *
+ * Почему путь по-прежнему `/api/telegram/remind`, хотя канала теперь два: этот URL — контракт
+ * с планировщиком (`.github/workflows/reminders.yml` + `CRON_SECRET` в GitHub Secrets).
+ * Переименование потребовало бы менять workflow и секрет одновременно, и на время
+ * рассинхронизации напоминания перестали бы уходить вообще — ровно та поломка, которую эта
+ * фича должна лечить. Один тик = один запрос = оба канала.
  *
  * Защита: `Authorization: Bearer <CRON_SECRET>`, сверяется через SHA-256 + timingSafeEqual
  * (тот же паттерн, что app/api/admin/close-week/route.ts). Это ЕДИНСТВЕННЫЙ барьер:
@@ -15,17 +22,20 @@
  *
  * ТИК НЕ ТОЧНЫЙ: GitHub Actions по расписанию может сработать с задержкой до 10–20 минут.
  * Поэтому роут не полагается на то, что его позвали ровно вовремя, — он выбирает ВСЕХ, у
- * кого нужное событие уже наступило (`dueReminders`, чистая функция от текущего `now`,
- * lib/telegram-remind.ts). Из-за этого идемпотентность по `(identity, lastCrankAt, kind)`
- * не опция, а обязательное условие: сдвоенный или запоздавший тик не должен прислать одно
- * и то же напоминание дважды.
+ * кого нужное событие уже наступило (`dueKinds`, чистая функция от текущего `now`,
+ * lib/reminders.ts). Из-за этого идемпотентность (у Telegram по `(identity, lastCrankAt,
+ * kind)`, у пушей по `(endpoint, lastCrankAt, kind)`) не опция, а обязательное условие:
+ * сдвоенный или запоздавший тик не должен прислать одно и то же напоминание дважды.
  *
- * БОТ НЕ МУТИРУЕТ ИГРОВОЙ СТЕЙТ: `settle()` вызывается только В ПАМЯТИ (как в
+ * НИ ОДИН КАНАЛ НЕ МУТИРУЕТ ИГРОВОЙ СТЕЙТ: `settle()` вызывается только В ПАМЯТИ (как в
  * GET /api/state и buildLeaderboard) — ни одного `store.mutate` здесь нет.
  */
 import { NextRequest } from "next/server";
 import { settle } from "@/lib/game";
 import { jsonNoStore } from "@/lib/http";
+import { pushConfigured, sendWebPush } from "@/lib/push";
+import { pushNotification, pushPayload } from "@/lib/push-copy";
+import { duePushReminders, reservePush, runPushReminders } from "@/lib/push-remind";
 import { getStore } from "@/lib/store";
 import { sendTelegramMessage, telegramConfigured, verifyCronSecret } from "@/lib/telegram";
 import { raidWarningText, windowOpenText } from "@/lib/telegram-copy";
@@ -35,7 +45,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  if (!telegramConfigured()) {
+  const telegramOn = telegramConfigured();
+  const pushOn = pushConfigured();
+  if (!telegramOn && !pushOn) {
+    // Ни один канал не настроен — рассылать нечем. Отдельные каналы независимы: включённый
+    // бот не требует VAPID-ключей и наоборот.
     return jsonNoStore({ error: "not_configured" }, { status: 503 });
   }
   if (!verifyCronSecret(req.headers.get("authorization"))) {
@@ -46,8 +60,12 @@ export async function POST(req: NextRequest) {
   const store = await getStore();
 
   // Ровно те же источники, что читает борд (lib/leaderboard.ts) и close-week: снапшот
-  // всех игроков плюс их привязки чата. Никакой отдельной "теневой" копии стейта.
-  const [snapshot, links] = await Promise.all([store.snapshot(), store.telegramLinks()]);
+  // всех игроков плюс адреса доставки. Никакой отдельной "теневой" копии стейта.
+  const [snapshot, links, pushSubs] = await Promise.all([
+    store.snapshot(),
+    telegramOn ? store.telegramLinks() : Promise.resolve([]),
+    pushOn ? store.pushSubscriptions() : Promise.resolve([]),
+  ]);
   const chatIdByIdentity = new Map(links.map((l) => [l.identity, l.chatId]));
 
   // settle() ТОЛЬКО в памяти, без персиста — read-only использование, как в /api/state.
@@ -57,8 +75,7 @@ export async function POST(req: NextRequest) {
   }));
 
   const due = dueReminders(live, chatIdByIdentity, now);
-
-  const summary = await runReminders(due, now, {
+  const telegram = await runReminders(due, now, {
     reserve: reserveReminder,
     send: (chatId, kind) =>
       sendTelegramMessage(chatId, kind === "window_open" ? windowOpenText() : raidWarningText()),
@@ -67,5 +84,25 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return jsonNoStore({ ok: true, due: due.length, ...summary });
+  const duePush = duePushReminders(live, pushSubs, now);
+  const push = await runPushReminders(duePush, now, {
+    reserve: reservePush,
+    send: (target) =>
+      sendWebPush(target, pushPayload(target.kind), pushNotification(target.kind).ttlSec, now),
+    // 404/410 от push-сервиса или исчерпанные попытки: адрес доставки удаляется физически.
+    drop: async (endpoint) => {
+      await store.deletePushSubscriptionByEndpoint(endpoint);
+    },
+    noteResult: (endpoint, ok) => store.notePushResult(endpoint, ok),
+  });
+
+  // Сводка раздельно по каналам: «пуши не уходят, а Telegram уходит» должно быть видно из
+  // одного ответа, иначе отладка сводится к угадыванию. `due` сверху — суммарное число
+  // событий к отправке: этот ключ читает e2e-скрипт и лог workflow, и ломать его не за что.
+  return jsonNoStore({
+    ok: true,
+    due: due.length + duePush.length,
+    telegram: { due: due.length, ...telegram },
+    push: { due: duePush.length, ...push },
+  });
 }

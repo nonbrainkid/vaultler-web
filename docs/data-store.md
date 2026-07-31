@@ -23,11 +23,17 @@ DATABASE_URL пуст, prod   → падаем с внятной ошибкой
 | `mutate(identity, now, fn)` | read-modify-write чистой функцией из `lib/game` | лок / транзакция |
 | `snapshot()` | все игроки со стейтами — для борда | нет |
 | `setProfile(identity, now, patch)` | ник + приватность, с проверкой уникальности | глобальная сериализация |
+| `playerByNickname(nick)` | найти игрока по нику без регистра — вход на `/u/[nick]`. Точечный, а не фильтр по `snapshot()`: 404 у неизвестного ника не должен стоить чтения всей таблицы (в Postgres работает уникальный индекс `nicknameKey`) | нет |
 | `saveWeekResults(records)` | результаты завершённой недели | одна транзакция на всю неделю |
 | `weekResults(weekId)` | кто и с каким местом закончил неделю | нет |
 | `linkTelegram(identity, chatId, now)` | привязать identity ↔ chatId бота напоминаний, 1:1 в обе стороны | транзакция (Prisma) / очередь (файл) |
 | `unlinkTelegramByIdentity` / `unlinkTelegramByChatId` | физически удалить привязку (кнопка сайта / `/stop`) | да |
 | `telegramChatIdFor(identity)` / `telegramLinks()` | своя привязка / все привязки (для крона рассылки) | нет |
+| `savePushSubscription(identity, sub, now)` | подписка браузера на веб-пуши; upsert по `endpoint` — перевешивает на текущий identity | upsert по уникальному ключу |
+| `deletePushSubscription(identity, endpoint)` | отписка с сайта, **только своя** (endpoint приходит из тела запроса) | да |
+| `deletePushSubscriptionByEndpoint(endpoint)` | чистка после 404/410 от push-сервиса и исчерпания попыток | да |
+| `countPushSubscriptions(identity)` / `pushSubscriptions()` | сколько устройств у меня / все подписки (для крона) | нет |
+| `notePushResult(endpoint, ok)` | успех обнуляет счётчик неудач, провал инкрементит (в БД, не чтением-записью) | атомарный `increment` |
 
 ### Результаты недели фиксирует сам `mutate`
 
@@ -110,6 +116,18 @@ model TelegramLink {               // identity ↔ chatId бота напоми�
   chatId   BigInt  @unique          // единственное персональное поле — не username/имя/язык
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model PushSubscription {           // подписка браузера на веб-пуши (спринт 1.2)
+  id       String @id @default(cuid())
+  identity String                   // НЕ уникален: у игрока может быть телефон и ноутбук
+  endpoint String @unique           // адрес доставки И ключ идемпотентности; наружу не отдаётся
+  p256dh   String                   // публичный ключ агента (RFC 8291), 65 байт base64url
+  auth     String                   // секрет подписки, 16 байт base64url
+  failures  Int      @default(0)    // подряд неудач; 8 → подписку удаляем (MAX_PUSH_FAILURES)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([identity])               // рассылка группирует подписки по игроку
 }
 
 model CrankLog {                  // аудит кранков: анти-чит и разбор споров
@@ -206,6 +224,12 @@ store.mutate(identity, now, fn, (outcome) => CrankAudit | null)
 подмешивать их в `players.json` сломало бы схему, которую построчно читает `hydrateState`.
 В отличие от игрового стейта, читается заново на КАЖДОЙ операции (без кэша в памяти) —
 привязки делаются редко, а свежесть важнее одного лишнего `stat`.
+
+`.data/push-subscriptions.json` — подписки на веб-пуши, третьим файлом и по той же причине.
+Тоже без кэша в памяти. Благодаря ему второй канал напоминаний разрабатывается локально без
+Postgres — правило «БД для разработки не нужна» остаётся в силе. Покрыто
+`lib/store-file.test.ts` (перевешивание endpoint'а на новый identity, отписка только своей
+подписки, счётчик неудач, кросс-экземплярная свежесть).
 
 ## Известные ограничения
 

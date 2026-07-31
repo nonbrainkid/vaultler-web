@@ -11,10 +11,11 @@
  * buildLeaderboard) и только решает, кому что написать — ни одного вызова `store.mutate`
  * здесь нет и быть не должно.
  */
-import { GAME, phase, type PlayerState } from "./game";
+import { GAME, type PlayerState } from "./game";
 import { getKv } from "./kv";
+import { DEFAULT_WARN_BEFORE_MS, dueKinds, type ReminderKind } from "./reminders";
 
-export type ReminderKind = "window_open" | "raid_warning";
+export type { ReminderKind };
 
 export interface DueReminder {
   identity: string;
@@ -24,17 +25,13 @@ export interface DueReminder {
   lastCrankAt: number;
 }
 
-/** За сколько до рейдера слать предупреждение (docs/brief-engineer.md: "2 часа"). */
-const DEFAULT_WARN_BEFORE_MS = 2 * 60 * 60 * 1000;
-
 /**
  * Какие напоминания нужно отправить сейчас, из уже расчитанных (settled) состояний игроков.
  *
- * Оба напоминания имеют смысл ТОЛЬКО в фазе `ready` — окно открыто и рейда ещё не было:
- *  - "окно открылось" актуально всё время, пока фаза `ready` (дедуп по `(identity,
- *    lastCrankAt, kind)` в `reserveReminder` гарантирует, что уйдёт оно только один раз
- *    за цикл, даже если крон видит фазу `ready` на нескольких тиках подряд);
- *  - "2 часа до рейдера" — только в последние `warnBeforeMs` миллисекунд перед рейдом.
+ * Само расписание («в какой фазе что уместно») живёт в `lib/reminders.ts` и общее с
+ * веб-пушами: два канала обязаны срабатывать на одни и те же события, иначе игрок получал
+ * бы предупреждение в браузере и не получал в Telegram. Здесь остаётся только привязка к
+ * чату бота.
  *
  * Чистая функция: не читает `Date.now()`, не трогает сеть/БД — легко тестируется без моков.
  */
@@ -49,16 +46,10 @@ export function dueReminders(
     const chatId = chatIdByIdentity.get(p.identity);
     if (chatId === undefined) continue; // не привязан к боту — писать некуда
 
-    const { state } = p;
-    if (!state.machineOn || state.lastCrankAt === null) continue;
-    if (phase(state, now) !== "ready") continue; // ещё заводится, либо уже рейд/выключена
-
-    const lastCrankAt = state.lastCrankAt;
-    out.push({ identity: p.identity, chatId, kind: "window_open", lastCrankAt });
-
-    const raidAt = lastCrankAt + GAME.WIND_MS + GAME.GRACE_MS;
-    if (raidAt - now <= warnBeforeMs) {
-      out.push({ identity: p.identity, chatId, kind: "raid_warning", lastCrankAt });
+    for (const kind of dueKinds(p.state, now, warnBeforeMs)) {
+      // lastCrankAt здесь заведомо не null: dueKinds вернул непустой список только для
+      // заведённой машины.
+      out.push({ identity: p.identity, chatId, kind, lastCrankAt: p.state.lastCrankAt! });
     }
   }
   return out;

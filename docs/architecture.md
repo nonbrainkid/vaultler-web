@@ -49,6 +49,8 @@ GET /api/leaderboard (8с)                           lib/vltr.ts → RPC        
 | сервер → браузер | наружу не уходят internal id (`dev:…`, `wallet:0x…`) и адрес скрывшего игрока | `lib/leaderboard.ts` |
 | Telegram → сервер | хеш секрета в пути URL **и** сам секрет в заголовке `X-Telegram-Bot-Api-Secret-Token` — разные значения (не `Origin`: у вебхука его нет) | `lib/telegram.ts`, `app/api/telegram/webhook/[secret]/route.ts` |
 | сервер → браузер (бот) | `chatId` не отдаётся ни в одном ответе API | `lib/telegram-link.ts` |
+| браузер → сервер (пуши) | `endpoint` подписки — это адрес НАШЕГО исходящего запроса: только https и публичное DNS-имя, никаких IP-литералов и localhost (иначе SSRF по расписанию) | `lib/push-subscription.ts` |
+| сервер → push-сервис | тело шифруется ключами самой подписки (RFC 8291): Google/Mozilla передают байты, не читая их; заголовок подписан VAPID | `lib/webpush.ts` |
 
 ## Поток данных: типовые сценарии
 
@@ -68,6 +70,14 @@ GET /api/leaderboard (8с)                           lib/vltr.ts → RPC        
 **Вход кошельком.** `GET /api/auth/nonce` (nonce в httpOnly-cookie) → клиент собирает
 SIWE-сообщение и подписывает → `POST /api/auth/verify` → идентичность становится
 `wallet:0x…`, сервер сам читает баланс $VLTR и ставит `boost`.
+
+**Браузерные напоминания (веб-пуши).** Клиент (`PushReminders.tsx`) спрашивает
+`GET /api/push/subscribe` → получает публичный ключ VAPID → по КЛИКУ игрока просит разрешение,
+регистрирует `/sw.js` и отдаёт подписку в `POST /api/push/subscribe` (endpoint валидируется,
+запись upsert'ится по нему). Рассылка — тот же путь, что у бота: `POST /api/telegram/remind`
+читает `snapshot()` + `pushSubscriptions()`, считает `settle()` ТОЛЬКО в памяти, выбирает
+события общей функцией `dueKinds` и шлёт зашифрованные пуши. Мёртвые подписки (404/410 или
+8 неудач подряд) удаляются на месте. `store.mutate` в этом пути нет — пуш не может начислить стек.
 
 **Привязка Telegram.** `POST /api/telegram/link` выдаёт одноразовый код владельцу
 текущей сессии → игрок отправляет боту `/start <код>` → Telegram шлёт апдейт на
@@ -90,6 +100,9 @@ app/
   components/             лендинг-секции, ConnectButton, SafeSprite, ProfileEditor
   api/                    state · crank · leaderboard · profile · auth/* · boost/refresh · health
                           telegram/link · telegram/unlink · telegram/webhook/[secret] · telegram/remind
+                          push/subscribe · push/unsubscribe
+  pwa-icon/route.tsx      иконки установленного приложения (192/512) по стабильному пути
+  components/PushReminders.tsx   виджет браузерных напоминаний (рядом с TelegramLink)
   error.tsx global-error.tsx not-found.tsx      границы ошибок
   icon.tsx apple-icon.tsx opengraph-image.tsx manifest.ts robots.ts sitemap.ts
 lib/
@@ -111,8 +124,15 @@ lib/
   telegram-link.ts        одноразовый код привязки (KV, фолбэк в память), completeLink
   telegram-remind.ts      dueReminders (чистая), идемпотентность, прогон рассылки
   telegram-copy.ts        тексты сообщений бота
+  reminders.ts            ОБЩЕЕ расписание напоминаний: dueKinds            (чистое)
+  webpush.ts              шифрование RFC 8291 + подпись VAPID на node:crypto (без зависимостей)
+  push.ts                 конфиг/статус веб-пушей, отправка одному адресату
+  push-remind.ts          duePushReminders (чистая), дедуп по устройству, прогон + чистка мёртвых
+  push-subscription.ts    валидация подписки, политика endpoint'ов, отпечаток для логов
+  push-copy.ts            тексты и пайлоад уведомлений                      (чистое)
 proxy.ts                  сессия + CSP с nonce
-prisma/schema.prisma      Player, CrankLog, WeekResult, TelegramLink
+prisma/schema.prisma      Player, CrankLog, WeekResult, TelegramLink, PushSubscription
+public/sw.js              service worker: показ пушей, клик → сайт; НИЧЕГО не кэширует
 scripts/                  check-secrets · seed-bots · test-auth · test-profile · render-*
 reference/                HTML-прототип механики (эталон петли, не эталон визуала)
 ```

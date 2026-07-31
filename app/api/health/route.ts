@@ -6,6 +6,7 @@ import { getStore } from "@/lib/store";
 import { clientIpSource, rateLimitBackend } from "@/lib/ratelimit";
 import { jsonNoStore } from "@/lib/http";
 import { telegramStatus } from "@/lib/telegram";
+import { pushStatus } from "@/lib/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +51,11 @@ export async function GET(req: Request) {
   // "off" — env не заданы, бот выключен и ничего не ломает; "misconfigured" — часть env
   // задана, а часть нет (опаснее, чем "off": молчаливая дыра). "on" — можно setWebhook.
   checks.telegram = telegramStatus();
+  // Веб-пуши — второй канал напоминаний, включается своим набором env (VAPID_*) и не зависит
+  // от бота. "misconfigured" здесь означает, в частности, и «ключи есть, а CRON_SECRET нет»:
+  // кнопка на сайте работала бы, подписки копились, а рассылка отвечала бы 401 — то есть
+  // игрок считал бы, что напоминать ему просто нечего.
+  checks.push = pushStatus();
 
   return jsonNoStore({ ok, checks, ts: Date.now() }, { status: ok ? 200 : 503 });
 }

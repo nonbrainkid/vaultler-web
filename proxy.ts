@@ -54,6 +54,17 @@ function cspHeader(nonce: string): string {
     `font-src 'self' data:`,
     // кошелёк + RPC (https/wss). Скрипт всё равно не выполнится без nonce, так что ок
     `connect-src 'self' https: wss:`,
+    /**
+     * Service worker для веб-пушей (`/sw.js`) — ЯВНО, а не по фолбэку.
+     *
+     * Без этой строки `worker-src` наследуется от `script-src`, где стоит `strict-dynamic`,
+     * а `strict-dynamic` заставляет браузер игнорировать `'self'` и разрешать только
+     * скрипты, добавленные доверенным скриптом. Регистрация воркера под это правило не
+     * попадает — она блокируется, и в проде (где CSP строгий) напоминания молча не
+     * включались бы, работая при этом в dev. Один явный источник закрывает вопрос:
+     * воркер разрешён только со своего origin.
+     */
+    `worker-src 'self'`,
     `object-src 'none'`,
     `base-uri 'self'`,
     `form-action 'self'`,

@@ -224,6 +224,12 @@ const check = (name, cond) => {
   });
   const okJson = await okAuth.json().catch(() => ({}));
   check("верный секрет крона → 200 с summary", okAuth.status === 200 && okJson.ok === true && typeof okJson.due === "number");
+  // Роут рассылает ОБА канала (спринт 1.2): сводка обязана быть раздельной, иначе «пуши не
+  // уходят, а Telegram уходит» пришлось бы выяснять угадыванием.
+  check(
+    "сводка раздельная по каналам (telegram + push)",
+    typeof okJson.telegram?.sent === "number" && typeof okJson.push?.sent === "number",
+  );
 }
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} passed ${pass}, failed ${fail}`);

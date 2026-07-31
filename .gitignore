@@ -54,3 +54,4 @@ next-env.d.ts
 /video/node_modules
 /video/out
 /video/qa
+/video/public/vaultler-theme.wav

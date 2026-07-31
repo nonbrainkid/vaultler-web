@@ -44,6 +44,15 @@ const TELEGRAM_LINK_LIMIT = 5;
 const TELEGRAM_LINK_WINDOW_MS = 10 * 60_000;
 
 /**
+ * Подписка/отписка на веб-пуши — свой узкий бюджет per identity. Каждый вызов пишет строку
+ * в БД, а браузер вправе перевыпускать подписку (ротация ключей push-сервиса), поэтому
+ * несколько попыток подряд легитимны. Без лимита страница-жертва CSRF-вызовом (или просто
+ * цикл в консоли) плодила бы записи в таблице подписок.
+ */
+const PUSH_SUB_LIMIT = 10;
+const PUSH_SUB_WINDOW_MS = 10 * 60_000;
+
+/**
  * Апдейты вебхука — лимит per chat.id. Основная защита от чужих запросов — секрет
  * вебхука (lib/telegram.ts); это скорее анти-флуд на случай, если один чат начнёт
  * заваливать нас командами (в т.ч. чужой скрипт, узнавший chat.id).
@@ -92,6 +101,7 @@ const memNonce = memoryWindow(NONCE_LIMIT, WINDOW_MS);
 const memProfile = memoryWindow(PROFILE_LIMIT, WINDOW_MS);
 const memTelegramLink = memoryWindow(TELEGRAM_LINK_LIMIT, TELEGRAM_LINK_WINDOW_MS);
 const memTelegramWebhook = memoryWindow(TELEGRAM_WEBHOOK_LIMIT, TELEGRAM_WEBHOOK_WINDOW_MS);
+const memPushSub = memoryWindow(PUSH_SUB_LIMIT, PUSH_SUB_WINDOW_MS);
 
 // ---- Общий стор ----
 
@@ -204,6 +214,16 @@ export function allowTelegramLink(key: string, now: number): Promise<boolean> {
     (kv) =>
       kvWindow(kv, `${PREFIX}:tglink:${key}`, TELEGRAM_LINK_LIMIT, TELEGRAM_LINK_WINDOW_MS, now),
     memTelegramLink,
+    key,
+    now,
+  );
+}
+
+/** Подписка/отписка на веб-пуши — 10 раз за 10 минут на identity. */
+export function allowPushSubscribe(key: string, now: number): Promise<boolean> {
+  return guard(
+    (kv) => kvWindow(kv, `${PREFIX}:push:${key}`, PUSH_SUB_LIMIT, PUSH_SUB_WINDOW_MS, now),
+    memPushSub,
     key,
     now,
   );

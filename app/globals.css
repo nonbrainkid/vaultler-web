@@ -1502,6 +1502,44 @@ a.addrlink:focus-visible {
   margin-top: 2px;
 }
 
+/* ---- share card ----
+   Кнопка шеринга — золотая и во всю ширину карточки: это второе по важности действие на
+   экране после самого кранка, и мельче кнопки CRANK она быть должна, но незаметной — нет. */
+.sharecard .btn {
+  margin-bottom: 9px;
+}
+.share-ok {
+  font-size: 15px;
+  color: var(--neon);
+  margin-bottom: 7px;
+}
+/* Клипборд недоступен (нет разрешения или не-https) — ссылку показываем текстом, чтобы
+   её можно было выделить пальцем. Ломать длинный URL обязательно: иначе он растягивает
+   карточку и уносит боковую панель за край экрана. */
+.share-manual {
+  font-size: 14px;
+  color: var(--sand);
+  margin-bottom: 7px;
+}
+.share-manual .mono {
+  display: block;
+  word-break: break-all;
+  color: var(--bone);
+}
+.share-view {
+  display: inline-block;
+  margin-top: 9px;
+  font-family: var(--pixel);
+  font-size: 8px;
+  color: var(--gold);
+  text-decoration: none;
+  border-bottom: 2px solid var(--gold-lo);
+}
+.share-view:hover,
+.share-view:focus-visible {
+  color: var(--gold-hi);
+}
+
 /* ---- telegram reminders ---- */
 .tg-code {
   font-family: var(--read);
@@ -1956,6 +1994,60 @@ a.addrlink:focus-visible {
   border: 2px solid currentColor;
   padding: 2px 4px;
   vertical-align: middle;
+}
+
+/* ───────────── /u/[nick] — публичная карточка игрока ─────────────
+   Пришедший по ссылке видит чужой сейф, три цифры и кнопку «сыграть». Раскладка своя, но
+   ридауты и подпись скина переиспользованы из игры (.readouts/.ro/.skin-tag): карточка
+   должна читаться как тот же экран, что и машина, иначе она выглядит чужим генератором. */
+.prof-card {
+  margin-bottom: 16px;
+}
+.prof-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.prof-safe {
+  flex: 0 0 130px;
+  width: 130px;
+}
+/* Колонка цифр тянется, но не ужимается ниже читаемого: на телефоне она уезжает под сейф,
+   а не сжимает три ридаута в полосу шириной в пару символов. */
+.prof-stats {
+  flex: 1 1 260px;
+  min-width: 240px;
+}
+.prof-stats .readouts {
+  margin-top: 0;
+}
+.prof-nobadge {
+  margin-top: 10px;
+}
+.prof-addr {
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.prof-addr .addrlink,
+.prof-addr .mono {
+  margin-left: 0;
+}
+/* Почему адрес виден — одной строкой рядом: иначе игрок, скрывший свой, решит, что сайт
+   раскрывает адреса всем. */
+.prof-addr em {
+  display: block;
+  font-style: normal;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.prof-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 /* ───────────── reduced motion ───────────── */

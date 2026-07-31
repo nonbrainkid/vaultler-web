@@ -23,7 +23,10 @@
 | `KV_REST_API_TOKEN` | до реальных призов | токен к нему. Альтернатива — пара `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` |
 | `TELEGRAM_BOT_TOKEN` | нужна, чтобы включить бота | токен из @BotFather. Формат `\d{8,10}:[A-Za-z0-9_-]{35}` — под этот паттерн настроен `check:secrets` |
 | `TELEGRAM_WEBHOOK_SECRET` | нужна, чтобы включить бота (≥32 симв.) | ГЛАВНЫЙ контроль вебхука. В `secret_token` при `setWebhook` уходит САМО значение (Telegram шлёт его заголовком на каждый апдейт), а в сегмент пути — `SHA-256` от него. Значения разные намеренно: URL попадает в логи, в историю терминала и в базу Telegram, и будь там сам секрет, утечка URL отдавала бы и заголовок. `openssl rand -hex 32`. **Ротация:** новое значение в env → передеплой → `npm run telegram:setup` заново (URL меняется вместе с секретом) |
-| `CRON_SECRET` | нужна, чтобы включить бота (≥16 симв.) | секрет `POST /api/telegram/remind` (`Authorization: Bearer`). То же значение кладётся в GitHub Secrets репозитория для workflow-рассылки (см. ниже) |
+| `CRON_SECRET` | нужна, чтобы включить бота **и веб-пуши** (≥16 симв.) | секрет `POST /api/telegram/remind` (`Authorization: Bearer`). Роут рассылает ОБА канала, планировщик один, значение одно. То же кладётся в GitHub Secrets репозитория для workflow-рассылки (см. ниже) |
+| `VAPID_PUBLIC_KEY` | нужна, чтобы включить веб-пуши | публичный ключ VAPID (P-256, base64url, 65 байт). Отдаётся браузеру роутом `GET /api/push/subscribe`. **Без** `NEXT_PUBLIC_` намеренно: так фича включается в рантайме, без пересборки бандла |
+| `VAPID_PRIVATE_KEY` | нужна, чтобы включить веб-пуши | приватный ключ той же пары (32 байта, base64url). **Секрет:** им подписывается право писать нашим подписчикам — утёк, значит чужой может рассылать «от Vaultler» (фишинг). Генерация — см. раздел про веб-пуши ниже |
+| `VAPID_SUBJECT` | нужна, чтобы включить веб-пуши | контакт владельца, `mailto:…` или `https://…`. Обязателен: Mozilla отвергает VAPID-JWT без валидного `sub`, и пуши молча не доходят |
 | `GAME_MODE` | **не выставлять** | `demo` → сжатые тайминги 30с/15с |
 | `DEV_FORCE_BOOST` | **не выставлять** | `1` → буст включён принудительно (тест пути буста) |
 
@@ -194,6 +197,82 @@ GitHub Actions тоже не гарантирует точный тик (под 
    https://thevaultler.fun/api/telegram/remind -H "authorization: Bearer $CRON_SECRET"`
    отвечает `200 {"ok":true,...}`.
 
+## Веб-пуши + PWA (спринт 1.2)
+
+Второй канал возврата игрока. Причина, по которой он вообще нужен: по прод-базе у **всех**
+игроков стрик = 1 — в 12-часовое окно не вернулся ни один. Telegram требует и Telegram, и
+привязки кодом; веб-пуш включается одной кнопкой в браузере и работает без кошелька.
+
+Код: `lib/webpush.ts` (шифрование RFC 8291 + подпись VAPID RFC 8292, **без npm-зависимостей**,
+на `node:crypto`), `lib/push.ts` (конфиг/статус/отправка), `lib/push-remind.ts` (кому и когда),
+`lib/push-copy.ts` (тексты), `app/api/push/*`, `public/sw.js`, `app/components/PushReminders.tsx`.
+Расписание общее с Telegram — `lib/reminders.ts`, и рассылает **тот же** роут
+`POST /api/telegram/remind` (один тик = оба канала; URL не менялся, чтобы не ломать контракт
+с workflow).
+
+**1. Сгенерировать пару VAPID.** Ключи нигде в репозитории не лежат и не должны:
+
+```bash
+node -e "const c=require('node:crypto'),k=c.createECDH('prime256v1');k.generateKeys();console.log('public:',k.getPublicKey().toString('base64url'));console.log('private:',k.getPrivateKey().toString('base64url'))"
+```
+
+Приватный ключ — в env Vercel как sensitive, публичный — обычной переменной. **Ротация ключей
+отписывает всех:** подписка в браузере привязана к `applicationServerKey`, и после смены пары
+push-сервисы начнут отвечать 403/410, а рассылка сама удалит записи (`droppedGone` в ответе
+роута). Менять только при утечке.
+
+**2. Миграция БД** — новая таблица `PushSubscription`, аддитивная. Prisma (предпочтительно,
+с прод-строкой подключения в окружении):
+
+```bash
+npx prisma db push
+```
+
+Или SQL руками в консоли Neon (Vercel → Storage → vaultler-db → Query, сняв Read-only):
+
+```sql
+CREATE TABLE IF NOT EXISTS "PushSubscription" (
+  "id"        TEXT NOT NULL,
+  "identity"  TEXT NOT NULL,
+  "endpoint"  TEXT NOT NULL,
+  "p256dh"    TEXT NOT NULL,
+  "auth"      TEXT NOT NULL,
+  "failures"  INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PushSubscription_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "PushSubscription_endpoint_key"
+  ON "PushSubscription"("endpoint");
+CREATE INDEX IF NOT EXISTS "PushSubscription_identity_idx"
+  ON "PushSubscription"("identity");
+```
+
+`endpoint` уникален — на нём держится идемпотентность: тот же браузер после входа кошельком
+перевешивается на новый `identity`, а не превращается во вторую подписку.
+
+**3. Выставить env** (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) и передеплоить.
+`CRON_SECRET` уже задан для Telegram — он же обслуживает пуши.
+
+**4. Проверка:**
+
+```bash
+curl https://thevaultler.fun/api/health           # push: "on"
+curl https://thevaultler.fun/api/push/subscribe   # configured:true + publicKey
+curl -X POST https://thevaultler.fun/api/telegram/remind \
+  -H "authorization: Bearer $CRON_SECRET"         # {"ok":true,"telegram":{…},"push":{…}}
+```
+
+Затем вручную с телефона: открыть сайт → «TURN ON BROWSER REMINDERS» → разрешить →
+`GET /api/push/subscribe` показывает `subscriptions: 1`. На **iOS 16.4+ пуши работают только
+у сайта, добавленного на главный экран** — поэтому манифест доведён до устанавливаемого
+приложения (иконки 192/512 отдаёт `/pwa-icon?size=…`).
+
+⚠️ **Установленное приложение на iOS имеет своё хранилище cookie.** Игрок, добавивший сайт на
+главный экран, получит там **новую анонимную сессию** — прежний прогресс останется в Safari.
+Это поведение платформы, не баг: чтобы стек был один, нужно войти кошельком (SIWE) в обоих
+местах. На Android/Chrome хранилище общее, сессия не меняется.
+
 ## Runbook: Vercel
 
 1. **Проект.** Vercel → Add New → Project → импортировать репозиторий. Framework
@@ -263,6 +342,18 @@ GitHub Actions тоже не гарантирует точный тик (под 
 - [ ] `/api/health` → `telegram: "on"`.
 - [ ] `node scripts/test-telegram.mjs` пройден против прод-подобного стенда (см.
       docs/testing.md) — не запускать против настоящего прод-бота с реальными игроками.
+
+**Чтобы включить браузерные напоминания (спринт 1.2, PWA + веб-пуши):**
+
+- [ ] Пара VAPID сгенерирована владельцем, `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (sensitive) /
+      `VAPID_SUBJECT` заданы в env Vercel, проект передеплоен.
+- [ ] `npx prisma db push` выполнен ПОСЛЕ добавления `PushSubscription` в схему (аддитивно).
+- [ ] `/api/health` → `push: "on"`. `"misconfigured"` значит «часть env есть, часть нет» —
+      в том числе «ключи есть, а `CRON_SECRET` нет»: подписки копились бы, а рассылка отвечала
+      бы 401.
+- [ ] Ручная проверка с телефона: кнопка «TURN ON BROWSER REMINDERS» → разрешение → уведомление
+      приходит после `POST /api/telegram/remind`.
+- [ ] На iOS проверено из установленного на главный экран приложения (иначе Safari пушей не даёт).
 
 ## Локальный запуск
 

@@ -39,6 +39,16 @@
 | бесконечная долбёжка в заблокировавшего бота игрока | автоудаление привязки на 403 "bot was blocked by the user" | `lib/telegram-remind.ts`, `lib/telegram.ts` |
 | подмена ссылки на бота (фишинг под "официального") | username бота — одна константа `TELEGRAM_BOT_USERNAME` (`lib/links.ts`) и для сайта, и для deep link | `lib/links.ts`, `app/components/TelegramLink.tsx` |
 | накопление персональных данных через бота | хранится только `chatId`; username/имя/язык не сохраняются никогда | `prisma/schema.prisma` → `TelegramLink` |
+| SSRF по расписанию через подписку на пуши | `endpoint` обязан быть `https` на публичном DNS-имени: IP-литералы, `localhost`, `.local`/`.internal` и URL с логином отвергаются до записи в стор | `lib/push-subscription.ts` |
+| push-сервис (Google/Mozilla) читает содержимое напоминаний | тело шифруется ключами самой подписки (RFC 8291, `aes128gcm`); сервис передаёт байты | `lib/webpush.ts` |
+| утёкший `endpoint` = утечка данных игрока | в пайлоаде нет ничего персонального: ни ника, ни адреса, ни стека — текст одинаков для всех | `lib/push-copy.ts` (+ тест) |
+| чужой отключает игроку напоминания, зная его `endpoint` | удаление с сайта ограничено подписками текущей идентичности (`deleteMany` по паре `endpoint+identity`) | `lib/store-prisma.ts`, `app/api/push/unsubscribe` |
+| подделка отправителя пушей нашим подписчикам | VAPID: каждый запрос подписан ES256, `aud` — только origin конкретного сервиса, ключи только в env | `lib/webpush.ts`, `lib/push.ts` |
+| пуши кранкают за игрока / фармят стрики | ни один путь пушей не вызывает `store.mutate` — только `snapshot()` + `settle()` в памяти | `app/api/telegram/remind/route.ts` |
+| задвоенное уведомление при сдвиге крона | идемпотентность по `(endpoint, lastCrankAt, kind)`; в ключ KV идёт SHA-256-отпечаток, не сам endpoint | `lib/push-remind.ts` |
+| бесконечная долбёжка в отозванную подписку | 404/410 удаляют запись сразу, 8 неудач подряд — тоже | `lib/push-remind.ts` |
+| service worker кэширует персональный ответ и отдаёт его следующему пользователю устройства | `public/sw.js` не кэширует ничего: обработчик `fetch` есть только для критериев установки PWA и не вызывает `respondWith` | `public/sw.js` |
+| CSP молча ломает регистрацию воркера в проде | `worker-src 'self'` задан явно: по фолбэку `worker-src` унаследовал бы `script-src` со `strict-dynamic`, и регистрация блокировалась бы только в проде | `proxy.ts` |
 
 Жирным отмечено закрытое аудитом от 2026-07-25 (разбор — в `NOTES.md`).
 
@@ -78,9 +88,14 @@ API идут через `jsonNoStore()` (`cache-control: private, no-store…` +
 script-src 'self' 'nonce-<random>' 'strict-dynamic'    (прод)
 script-src 'self' 'unsafe-inline' 'unsafe-eval'        (dev — Turbopack HMR требует)
 default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:
-connect-src 'self' https: wss:; object-src 'none'; base-uri 'self';
+connect-src 'self' https: wss:; worker-src 'self'; object-src 'none'; base-uri 'self';
 form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests (прод)
 ```
+
+`worker-src 'self'` стоит явно, хотя фолбэк для него существует. Именно в фолбэке и была бы
+ловушка: без своей директивы `worker-src` наследует `script-src`, а там `strict-dynamic`,
+который велит игнорировать `'self'`. Регистрация `/sw.js` (веб-пуши) при этом блокируется
+**только в проде** — в dev CSP ослаблен под HMR, и локально всё работало бы.
 
 Зачем именно это: главный способ украсть крипту с сайта — подсунуть в страницу чужой
 скрипт, который перехватит взаимодействие с кошельком. Со `strict-dynamic` и nonce

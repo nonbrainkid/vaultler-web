@@ -170,6 +170,43 @@ describe("файловый стор: свежесть данных между э
   });
 });
 
+describe("поиск игрока по нику (вход на /u/[nick])", () => {
+  it("находит без учёта регистра — уникальность ника тоже без регистра", async () => {
+    const store = new FileStore();
+    await store.setProfile("wallet:0xabc", T0, { nickname: "Egor" });
+
+    for (const probe of ["Egor", "egor", "EGOR"]) {
+      const found = await store.playerByNickname(probe);
+      expect(found?.identity).toBe("wallet:0xabc");
+      expect(found?.state.nickname).toBe("Egor"); // регистр отображения сохранён
+    }
+  });
+
+  it("неизвестный и пустой ник — null, а не первый попавшийся игрок", async () => {
+    const store = new FileStore();
+    // Игрок БЕЗ ника: пустой ключ не должен «находить» его в nullable-поле.
+    await store.mutate("dev:a", T0, (s) => ({ state: s, result: null }));
+    expect(await store.playerByNickname("nobody")).toBeNull();
+    expect(await store.playerByNickname("")).toBeNull();
+    expect(await store.playerByNickname("   ")).toBeNull();
+  });
+
+  it("ник, стёртый игроком, перестаёт находиться — это и есть выключатель страницы", async () => {
+    const store = new FileStore();
+    await store.setProfile("wallet:0xabc", T0, { nickname: "egor" });
+    await store.setProfile("wallet:0xabc", T0, { nickname: null });
+    expect(await store.playerByNickname("egor")).toBeNull();
+  });
+
+  it("ник, заданный одним экземпляром, виден другому без перезапуска dev-сервера", async () => {
+    const writer = new FileStore();
+    const reader = new FileStore();
+    await reader.playerByNickname("egor"); // прогреваем устаревшую копию
+    await writer.setProfile("wallet:0xabc", T0, { nickname: "egor" });
+    expect((await reader.playerByNickname("egor"))?.identity).toBe("wallet:0xabc");
+  });
+});
+
 describe("привязка Telegram: 1:1 в обе стороны", () => {
   it("линкует identity к chatId и находится обратно", async () => {
     const store = new FileStore();
@@ -236,5 +273,88 @@ describe("привязка Telegram: 1:1 в обе стороны", () => {
     const reader = new FileStore();
     await writer.linkTelegram("dev:a", 111, T0);
     expect(await reader.telegramChatIdFor("dev:a")).toBe(111);
+  });
+});
+
+/**
+ * Подписки на веб-пуши в файловом сторе. Без этой поддержки разработка второго канала
+ * напоминаний требовала бы Postgres — а «БД для разработки не нужна» — правило проекта.
+ */
+describe("подписки на веб-пуши (dev-стор)", () => {
+  const SUB_A = { endpoint: "https://push.example.com/a", p256dh: "pA", auth: "aA" };
+  const SUB_B = { endpoint: "https://push.example.com/b", p256dh: "pB", auth: "aB" };
+
+  it("сохраняет подписку и считает её только своему игроку", async () => {
+    const store = new FileStore();
+    await store.savePushSubscription("dev:a", SUB_A, T0);
+    expect(await store.countPushSubscriptions("dev:a")).toBe(1);
+    expect(await store.countPushSubscriptions("dev:b")).toBe(0);
+    expect(await store.pushSubscriptions()).toEqual([
+      { identity: "dev:a", ...SUB_A, failures: 0, createdAt: T0 },
+    ]);
+  });
+
+  it("два устройства одного игрока — две записи (связь не 1:1, в отличие от Telegram)", async () => {
+    const store = new FileStore();
+    await store.savePushSubscription("dev:a", SUB_A, T0);
+    await store.savePushSubscription("dev:a", SUB_B, T0 + 1);
+    expect(await store.countPushSubscriptions("dev:a")).toBe(2);
+  });
+
+  it("тот же endpoint после входа кошельком ПЕРЕВЕШИВАЕТСЯ, а не задваивается", async () => {
+    const store = new FileStore();
+    await store.savePushSubscription("dev:a", SUB_A, T0);
+    await store.notePushResult(SUB_A.endpoint, false);
+    // Один и тот же браузер: анонимная сессия превратилась в кошельковую.
+    await store.savePushSubscription("wallet:0xabc", SUB_A, T0 + 1000);
+    const all = await store.pushSubscriptions();
+    expect(all).toHaveLength(1);
+    expect(all[0].identity).toBe("wallet:0xabc");
+    // Подписку только что подтвердил живой браузер — счётчик неудач обнулён.
+    expect(all[0].failures).toBe(0);
+    expect(await store.countPushSubscriptions("dev:a")).toBe(0);
+  });
+
+  it("отписка с сайта удаляет только СВОЮ подписку", async () => {
+    const store = new FileStore();
+    await store.savePushSubscription("dev:a", SUB_A, T0);
+    // Чужой endpoint не удаляется, даже если его прислали в теле запроса.
+    expect(await store.deletePushSubscription("dev:b", SUB_A.endpoint)).toBe(false);
+    expect(await store.countPushSubscriptions("dev:a")).toBe(1);
+
+    expect(await store.deletePushSubscription("dev:a", SUB_A.endpoint)).toBe(true);
+    expect(await store.pushSubscriptions()).toEqual([]);
+    // Повторная отписка — не ошибка, просто нечего удалять.
+    expect(await store.deletePushSubscription("dev:a", SUB_A.endpoint)).toBe(false);
+  });
+
+  it("удаление по endpoint'у (410 от push-сервиса) владельца не спрашивает", async () => {
+    const store = new FileStore();
+    await store.savePushSubscription("dev:a", SUB_A, T0);
+    expect(await store.deletePushSubscriptionByEndpoint(SUB_A.endpoint)).toBe(true);
+    expect(await store.deletePushSubscriptionByEndpoint(SUB_A.endpoint)).toBe(false);
+  });
+
+  it("notePushResult копит неудачи и обнуляется успехом", async () => {
+    const store = new FileStore();
+    await store.savePushSubscription("dev:a", SUB_A, T0);
+    expect(await store.notePushResult(SUB_A.endpoint, false)).toBe(1);
+    expect(await store.notePushResult(SUB_A.endpoint, false)).toBe(2);
+    expect(await store.notePushResult(SUB_A.endpoint, true)).toBe(0);
+    // Записи нет — 0, а не исключение: её мог удалить параллельный прогон рассылки.
+    expect(await store.notePushResult("https://push.example.com/zzz", false)).toBe(0);
+  });
+
+  it("подписки живут в своём файле, а не внутри players.json", async () => {
+    const store = new FileStore();
+    await store.savePushSubscription("dev:a", SUB_A, T0);
+    await expect(fs.readFile(file, "utf8")).rejects.toThrow();
+  });
+
+  it("подписка, сделанная одним экземпляром, видна другому без перезапуска", async () => {
+    const writer = new FileStore();
+    const reader = new FileStore();
+    await writer.savePushSubscription("dev:a", SUB_A, T0);
+    expect(await reader.countPushSubscriptions("dev:a")).toBe(1);
   });
 });

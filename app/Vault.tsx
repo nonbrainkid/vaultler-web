@@ -5,6 +5,7 @@ import type { HolderTierView, PublicView } from "@/lib/game";
 import ConnectButton from "./components/ConnectButton";
 import ProfileEditor from "./components/ProfileEditor";
 import SafeSprite from "./components/SafeSprite";
+import ShareCard from "./components/ShareCard";
 import TelegramLink from "./components/TelegramLink";
 import {
   RANK_SKINS,
@@ -609,6 +610,16 @@ export default function Vault({
               onSaved={refetch}
             />
           )}
+
+          {/* Стоит СРАЗУ под редактором ника: без ника личной карточки нет, и подсказка
+              «придумай имя выше» должна указывать на поле, которое видно на том же экране.
+              Видна всегда — анониму она объясняет путь, а не прячет фичу. */}
+          <ShareCard
+            nickname={nickname}
+            wallet={wallet}
+            streak={view?.streak ?? 0}
+            rank={rank}
+          />
 
           {/* Работает и без кошелька: анонимные сессии — 30 игроков из 34, и именно та
               аудитория, которую напоминания должны удержать в первую очередь. */}

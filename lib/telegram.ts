@@ -97,6 +97,17 @@ export function verifyWebhookSecret(candidate: string | null | undefined): boole
   return timingSafeStrEqual(candidate, secret);
 }
 
+/**
+ * Задан ли секрет планировщика. Спрашивает и `lib/push.ts`: роут рассылки
+ * (`POST /api/telegram/remind`) один на оба канала напоминаний — Telegram и веб-пуши, —
+ * и планировщик у них общий, поэтому секрет тоже один. Без него роут отвечает 401, и
+ * ни один канал не доставляет ничего: это должно быть видно в `/api/health` как
+ * «misconfigured», а не выглядеть работающей фичей.
+ */
+export function cronSecretConfigured(): boolean {
+  return envCronSecret() !== null;
+}
+
 /** Сверить `Authorization: Bearer <CRON_SECRET>` роута рассылки. */
 export function verifyCronSecret(authorizationHeader: string | null | undefined): boolean {
   const secret = envCronSecret();
